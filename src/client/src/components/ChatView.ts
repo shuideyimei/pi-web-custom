@@ -7,22 +7,38 @@ import "./FormattedText";
 @customElement("chat-view")
 export class ChatView extends LitElement {
   @property({ attribute: false }) messages: ChatLine[] = [];
+  @property() sessionId = "";
   @query(".chat") private chat?: HTMLDivElement;
   @state() private pinnedToBottom = true;
+  private restoreAfterUpdate = true;
+  private suppressScrollSave = false;
 
-  protected willUpdate(): void {
+  protected willUpdate(changed: Map<string, unknown>): void {
+    if (changed.has("sessionId")) {
+      const previousSessionId = changed.get("sessionId");
+      if (typeof previousSessionId === "string" && previousSessionId) this.saveScrollPosition(previousSessionId);
+      this.suppressScrollSave = true;
+      this.pinnedToBottom = true;
+      this.restoreAfterUpdate = true;
+      return;
+    }
     this.pinnedToBottom = this.isNearBottom();
   }
 
   protected updated(): void {
-    if (this.pinnedToBottom) this.scrollToBottom();
+    if (this.restoreAfterUpdate) {
+      this.restoreAfterUpdate = false;
+      this.restoreScrollPosition();
+    } else if (this.pinnedToBottom) {
+      this.scrollToBottom();
+    }
   }
 
   render() {
     return html`
       <div class="chat" @scroll=${this.onScroll}>
-        ${this.messages.map((message) => html`
-          <article class="msg ${message.role}">
+        ${this.messages.map((message, index) => html`
+          <article class="msg ${message.role}" data-index=${index}>
             <b class="label">${message.role}</b>
             ${message.parts.map((part) => this.renderPart(part))}
           </article>
@@ -46,6 +62,7 @@ export class ChatView extends LitElement {
 
   private onScroll() {
     this.pinnedToBottom = this.isNearBottom();
+    if (!this.suppressScrollSave) this.saveScrollPosition();
   }
 
   private isNearBottom(): boolean {
@@ -55,8 +72,108 @@ export class ChatView extends LitElement {
   }
 
   private scrollToBottom() {
+    requestAnimationFrame(() => {
+      const chat = this.chat;
+      if (!chat) return;
+      this.withSuppressedScrollSave(() => {
+        chat.scrollTop = chat.scrollHeight;
+      });
+    });
+  }
+
+  private restoreScrollPosition() {
+    requestAnimationFrame(() => {
+      const chat = this.chat;
+      const stored = this.readStoredScrollPosition();
+      if (!chat || !stored) {
+        this.withSuppressedScrollSave(() => {
+          if (chat) chat.scrollTop = chat.scrollHeight;
+        });
+        return;
+      }
+
+      const article = this.articleAt(stored.index);
+      if (!article) {
+        this.withSuppressedScrollSave(() => {
+          chat.scrollTop = chat.scrollHeight;
+        });
+        return;
+      }
+      this.withSuppressedScrollSave(() => {
+        const chatTop = chat.getBoundingClientRect().top;
+        const currentOffset = article.getBoundingClientRect().top - chatTop;
+        chat.scrollTop += currentOffset - stored.offset;
+      });
+    });
+  }
+
+  private saveScrollPosition(sessionId = this.sessionId) {
     const chat = this.chat;
-    if (chat) chat.scrollTop = chat.scrollHeight;
+    if (!chat || !sessionId) return;
+    try {
+      if (this.isNearBottom()) {
+        localStorage.removeItem(this.storageKey(sessionId));
+        return;
+      }
+      const firstVisible = this.firstVisibleArticle();
+      if (!firstVisible) {
+        localStorage.removeItem(this.storageKey(sessionId));
+        return;
+      }
+      const chatTop = chat.getBoundingClientRect().top;
+      const position = {
+        index: Number(firstVisible.dataset.index ?? 0),
+        offset: firstVisible.getBoundingClientRect().top - chatTop,
+      };
+      localStorage.setItem(this.storageKey(sessionId), JSON.stringify(position));
+    } catch {
+      // Ignore storage failures; scrolling should keep working without persistence.
+    }
+  }
+
+  private readStoredScrollPosition(): { index: number; offset: number } | undefined {
+    if (!this.sessionId) return undefined;
+    try {
+      const raw = localStorage.getItem(this.storageKey());
+      if (!raw) return undefined;
+      const value = JSON.parse(raw);
+      if (typeof value?.index !== "number" || typeof value?.offset !== "number") return undefined;
+      return { index: value.index, offset: value.offset };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private firstVisibleArticle(): HTMLElement | undefined {
+    const chat = this.chat;
+    if (!chat) return undefined;
+    const chatRect = chat.getBoundingClientRect();
+    return this.articles().find((article) => {
+      const rect = article.getBoundingClientRect();
+      return rect.bottom >= chatRect.top && rect.top <= chatRect.bottom;
+    });
+  }
+
+  private articleAt(index: number): HTMLElement | undefined {
+    return this.articles().find((article) => Number(article.dataset.index) === index);
+  }
+
+  private articles(): HTMLElement[] {
+    return Array.from(this.renderRoot.querySelectorAll<HTMLElement>("article.msg"));
+  }
+
+  private withSuppressedScrollSave(callback: () => void) {
+    this.suppressScrollSave = true;
+    callback();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.suppressScrollSave = false;
+      });
+    });
+  }
+
+  private storageKey(sessionId = this.sessionId): string {
+    return `pi-web:chat-scroll:${sessionId}`;
   }
 
   static styles = chatStyles;
