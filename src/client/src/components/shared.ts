@@ -140,9 +140,10 @@ export const commandPickerStyles = css`
 
 export const promptEditorStyles = css`
   :host { display: block; color: #e6edf3; font: 14px system-ui, sans-serif; }
-  footer { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 12px; border-top: 1px solid #30363d; }
+  footer { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; border-top: 1px solid #30363d; }
   footer.shell-mode { border-top-color: #3fb950; background: #0f1b12; }
   .editor-wrap { position: relative; min-width: 0; }
+  .actions { display: flex; gap: 8px; align-items: start; white-space: nowrap; }
   textarea { box-sizing: border-box; width: 100%; min-height: 54px; max-height: 220px; resize: none; overflow-y: auto; border-radius: 8px; border: 1px solid #30363d; background: #0d1117; color: #e6edf3; padding: 8px; }
   .shell-mode textarea { border-color: #3fb950; box-shadow: 0 0 0 1px #3fb95055; }
   .mode-hint { position: absolute; right: 8px; bottom: 8px; max-width: calc(100% - 16px); border: 1px solid #238636; border-radius: 999px; background: #0f2a16; color: #3fb950; padding: 2px 8px; font-size: 12px; pointer-events: none; }

@@ -50,9 +50,11 @@ export class PromptEditor extends LitElement {
           ${shellMode ? html`<div class="mode-hint">Shell command${inputMode.excludeFromContext ? " · excluded from context" : ""}</div>` : null}
           <autocomplete-menu .items=${this.completions} .selectedIndex=${this.selectedIndex} .onPick=${(item: CompletionItem) => { this.pick(item); }}></autocomplete-menu>
         </div>
-        <button ?disabled=${this.disabled} title=${this.canSteer ? "Queue after the current response" : "Send message"} @click=${() => { this.send("followUp"); }}>${this.canSteer ? "Queue" : "Send"}</button>
-        ${this.canSteer ? html`<button ?disabled=${this.disabled} title="Steer the current response before the next model call" @click=${() => { this.send("steer"); }}>Steer</button>` : null}
-        <button ?disabled=${this.disabled} title="Stop only this Pi session from continuing" @click=${() => this.onStopSession?.()}>Stop session</button>
+        <div class="actions">
+          <button ?disabled=${this.disabled} title=${this.canSteer ? "Queue after the current response" : "Send message"} @click=${() => { this.send("followUp"); }}>${this.canSteer ? "Queue" : "Send"}</button>
+          ${this.canSteer ? html`<button ?disabled=${this.disabled} title="Steer the current response before the next model call" @click=${() => { this.send("steer"); }}>Steer</button>` : null}
+          <button ?disabled=${this.disabled} title="Stop only this Pi session from continuing" @click=${() => this.onStopSession?.()}>Stop session</button>
+        </div>
       </footer>
     `;
   }
