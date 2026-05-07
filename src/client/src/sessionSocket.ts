@@ -6,6 +6,7 @@ export type SessionUiEvent =
   | { type: "tool.end"; toolName: string; isError: boolean }
   | { type: "status.update"; status: SessionStatus }
   | { type: "activity.update"; activity: SessionActivity }
+  | { type: "command.output"; level: "info" | "success" | "error"; message: string }
   | { type: "session.error"; message: string };
 
 export class SessionSocket {
@@ -118,7 +119,7 @@ export class GlobalSessionSocket {
 }
 
 function isSessionUiEvent(event: any): event is SessionUiEvent {
-  return ["assistant.delta", "tool.start", "tool.end", "status.update", "activity.update", "session.error"].includes(event?.type);
+  return ["assistant.delta", "tool.start", "tool.end", "status.update", "activity.update", "command.output", "session.error"].includes(event?.type);
 }
 
 function isGlobalSessionEvent(event: unknown): event is Extract<SessionUiEvent, { type: "status.update" | "activity.update" }> {

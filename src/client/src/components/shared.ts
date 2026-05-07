@@ -55,12 +55,19 @@ export const chatStyles = css`
   .msg.user { border-color: #2f81f7; background: #0d2847; }
   .msg.tool { border-color: #6e5200; background: #1f1a10; color: #d29922; }
   .msg.system { color: #ff7b72; }
+  .msg.event-group { padding: 0; border-color: #30363d; background: #0d1117; color: #8b949e; }
+  .msg.event-group > summary { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: #8b949e; }
+  .msg.event-group > summary .label { margin: 0; }
+  .group-body { padding: 0 12px 12px; }
+  .group-msg { padding: 10px 0; border-top: 1px solid #21262d; color: #e6edf3; }
+  .group-msg.tool { color: #d29922; }
+  .group-msg.system { color: #ff7b72; }
   .label { display: block; margin-bottom: 8px; color: #8b949e; font-size: 12px; text-transform: uppercase; }
   formatted-text.part { display: block; }
   .part + .part { margin-top: 10px; }
   .tool-line { color: #d29922; }
   .summary { color: #8b949e; margin-left: 6px; }
-  details { border-top: 1px solid #30363d; padding-top: 8px; }
+  .part:is(details) { border-top: 1px solid #30363d; padding-top: 8px; }
   summary { cursor: pointer; color: #8b949e; }
   pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 `;

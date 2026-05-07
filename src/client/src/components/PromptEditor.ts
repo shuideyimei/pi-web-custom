@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, type PropertyValues } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { api, type FileSuggestion, type SlashCommand } from "../api";
 import { promptEditorStyles, type CompletionItem } from "./shared";
@@ -16,6 +16,15 @@ export class PromptEditor extends LitElement {
   @state() private completions: CompletionItem[] = [];
   @state() private selectedIndex = 0;
   private requestVersion = 0;
+
+  protected willUpdate(changed: PropertyValues<this>) {
+    if (!changed.has("sessionId")) return;
+    const previousSessionId = changed.get("sessionId") as string | undefined;
+    if (previousSessionId) saveDraft(previousSessionId, this.draft);
+    this.draft = this.sessionId ? loadDraft(this.sessionId) : "";
+    this.completions = [];
+    this.selectedIndex = 0;
+  }
 
   render() {
     return html`
@@ -42,6 +51,7 @@ export class PromptEditor extends LitElement {
 
   private updateDraft(value: string) {
     this.draft = value;
+    if (this.sessionId) saveDraft(this.sessionId, this.draft);
     void this.refreshCompletions();
   }
 
@@ -111,6 +121,7 @@ export class PromptEditor extends LitElement {
 
   private pick(item: CompletionItem) {
     this.draft = `${this.draft.slice(0, item.replaceFrom)}${item.insertText} ${this.draft.slice(item.replaceTo)}`;
+    if (this.sessionId) saveDraft(this.sessionId, this.draft);
     this.completions = [];
   }
 
@@ -118,9 +129,41 @@ export class PromptEditor extends LitElement {
     const text = this.draft.trim();
     if (!text || this.disabled) return;
     this.draft = "";
+    if (this.sessionId) clearDraft(this.sessionId);
     this.completions = [];
     this.onSend?.(text);
   }
 
   static styles = promptEditorStyles;
+}
+
+const draftStoragePrefix = "pi-web:prompt-draft:";
+
+function draftStorageKey(sessionId: string): string {
+  return `${draftStoragePrefix}${sessionId}`;
+}
+
+function loadDraft(sessionId: string): string {
+  try {
+    return localStorage.getItem(draftStorageKey(sessionId)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveDraft(sessionId: string, draft: string): void {
+  try {
+    if (draft) localStorage.setItem(draftStorageKey(sessionId), draft);
+    else localStorage.removeItem(draftStorageKey(sessionId));
+  } catch {
+    // Ignore localStorage quota/privacy errors.
+  }
+}
+
+function clearDraft(sessionId: string): void {
+  try {
+    localStorage.removeItem(draftStorageKey(sessionId));
+  } catch {
+    // Ignore localStorage quota/privacy errors.
+  }
 }

@@ -19,8 +19,10 @@ export class StatusBar extends LitElement {
     const active = state !== "idle" || this.activity?.phase === "active";
     const context = status.contextUsage;
     const contextText = context
-      ? `${context.percent == null ? "?" : context.percent.toFixed(1)}%/${formatTokenCount(context.contextWindow)}`
-      : "context ?";
+      ? context.percent == null
+        ? `context ${formatTokenCount(context.contextWindow)}`
+        : `${context.percent.toFixed(1)}%/${formatTokenCount(context.contextWindow)}`
+      : "context unknown";
     const tokens = status.tokens;
     return html`
       <div class="bar">

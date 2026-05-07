@@ -69,10 +69,11 @@ export class SessionController {
   async runCommand(text: string) {
     const session = this.getState().selectedSession;
     if (!session) return;
+    this.setState({ messages: [...this.getState().messages, textMessage("user", text)] });
     try {
       this.applyCommandResult(await api.runCommand(session.id, text));
     } catch (error) {
-      this.setState({ error: String(error) });
+      this.setState({ messages: [...this.getState().messages, textMessage("system", String(error))], error: String(error) });
     }
   }
 
@@ -112,9 +113,10 @@ export class SessionController {
     const message = result.type === "unsupported" ? result.message : result.message;
     if (message) this.setState({ messages: [...this.getState().messages, textMessage(result.type === "unsupported" ? "system" : "tool", message)] });
     if (result.type === "done" && result.session) {
+      const current = this.getState().selectedSession;
       const sessions = [result.session, ...this.getState().sessions.filter((session) => session.id !== result.session?.id)];
-      this.setState({ sessions });
-      void this.selectSession(result.session);
+      this.setState({ sessions, selectedSession: current?.id === result.session.id ? result.session : current });
+      if (current?.id !== result.session.id) void this.selectSession(result.session);
     }
   }
 
@@ -144,6 +146,8 @@ export class SessionController {
       this.applyStatus(event.status);
     } else if (event.type === "activity.update") {
       this.applyActivity(event.activity);
+    } else if (event.type === "command.output") {
+      this.setState({ messages: [...messages, textMessage(event.level === "error" ? "system" : "tool", event.message)] });
     } else if (event.type === "session.error") {
       this.setState({ messages: [...messages, textMessage("system", event.message)] });
     }

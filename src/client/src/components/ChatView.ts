@@ -30,14 +30,81 @@ export class ChatView extends LitElement {
   render() {
     return html`
       <div class="chat" @scroll=${this.onScroll}>
-        ${this.messages.map((message, index) => html`
-          <article class="msg ${message.role}" data-index=${index}>
-            <b class="label">${message.role}</b>
-            ${message.parts.map((part) => this.renderPart(part))}
-          </article>
-        `)}
+        ${this.groupedMessages().map((group) => group.kind === "message"
+          ? this.renderMessage(group.message, group.index)
+          : this.renderMessageGroup(group.messages, group.startIndex))}
       </div>
     `;
+  }
+
+  private renderMessage(message: ChatLine, index: number) {
+    return html`
+      <article class="msg ${message.role}" data-index=${index}>
+        <b class="label">${message.role}</b>
+        ${message.parts.map((part) => this.renderPart(part))}
+      </article>
+    `;
+  }
+
+  private renderMessageGroup(messages: ChatLine[], startIndex: number) {
+    return html`
+      <details class="msg event-group" data-index=${startIndex}>
+        <summary>
+          <b class="label">events</b>
+          <span>${this.groupSummary(messages)}</span>
+        </summary>
+        <div class="group-body">
+          ${messages.map((message) => html`
+            <section class="group-msg ${message.role}">
+              <b class="label">${message.role}</b>
+              ${message.parts.map((part) => this.renderPart(part))}
+            </section>
+          `)}
+        </div>
+      </details>
+    `;
+  }
+
+  private groupedMessages(): Array<{ kind: "message"; message: ChatLine; index: number } | { kind: "group"; messages: ChatLine[]; startIndex: number }> {
+    const groups: Array<{ kind: "message"; message: ChatLine; index: number } | { kind: "group"; messages: ChatLine[]; startIndex: number }> = [];
+    let eventMessages: ChatLine[] = [];
+    let eventStartIndex = 0;
+
+    const pushEvent = (message: ChatLine, index: number) => {
+      if (!eventMessages.length) eventStartIndex = index;
+      eventMessages.push(message);
+    };
+    const flushEvents = () => {
+      if (!eventMessages.length) return;
+      groups.push({ kind: "group", messages: eventMessages, startIndex: eventStartIndex });
+      eventMessages = [];
+    };
+
+    this.messages.forEach((message, index) => {
+      const readableParts = message.parts.filter((part) => this.isReadablePart(message, part));
+      const technicalParts = message.parts.filter((part) => !this.isReadablePart(message, part));
+
+      if (technicalParts.length) pushEvent({ role: message.role, parts: technicalParts }, index);
+      if (readableParts.length) {
+        flushEvents();
+        groups.push({ kind: "message", message: { role: message.role, parts: readableParts }, index });
+      }
+    });
+    flushEvents();
+    return groups;
+  }
+
+  private isReadablePart(message: ChatLine, part: ChatPart): boolean {
+    return part.type === "text" && (message.role === "user" || message.role === "assistant" || message.role === "system");
+  }
+
+  private groupSummary(messages: ChatLine[]): string {
+    const counts = messages.reduce<Record<string, number>>((acc, message) => {
+      acc[message.role] = (acc[message.role] ?? 0) + 1;
+      return acc;
+    }, {});
+    const details = Object.entries(counts).map(([role, count]) => `${count} ${role}`).join(" · ");
+    return `${messages.length} ${messages.length === 1 ? "event" : "events"}${details ? ` · ${details}` : ""}`;
   }
 
   private renderPart(part: ChatPart) {
@@ -157,7 +224,7 @@ export class ChatView extends LitElement {
   }
 
   private articles(): HTMLElement[] {
-    return Array.from(this.renderRoot.querySelectorAll<HTMLElement>("article.msg"));
+    return Array.from(this.renderRoot.querySelectorAll<HTMLElement>("article.msg, details.msg"));
   }
 
   private withSuppressedScrollSave(callback: () => void) {

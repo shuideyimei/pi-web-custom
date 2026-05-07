@@ -34,7 +34,7 @@ export class SessionCommandService {
     }
 
     if (name === "session") return { type: "done", message: formatSessionStats(session) };
-    if (name === "name") return this.nameSession(session, rest);
+    if (name === "name") return this.nameSession(active, rest);
     if (name === "compact") return this.compact(session, rest);
     if (name === "clone") return this.clone(active);
     if (name === "fork") return this.fork(active);
@@ -56,17 +56,27 @@ export class SessionCommandService {
     return { type: "unsupported", message: "Unsupported command response" };
   }
 
-  private nameSession(session: AgentSession, name: string): ClientCommandResult {
+  private nameSession(active: ActiveSession, name: string): ClientCommandResult {
     if (!name) return { type: "unsupported", message: "Usage: /name <session name>" };
-    session.setSessionName(name);
-    return { type: "done", message: `Session named ${name}` };
+    active.runtime.session.setSessionName(name);
+    return { type: "done", message: `Session named: ${name}`, session: clientSessionFromRuntime(active.runtime) };
   }
 
   private compact(session: AgentSession, instructions: string): ClientCommandResult {
-    void session.compact(instructions || undefined).catch((error) => {
-      this.events.publish(session.sessionId, { type: "session.error", message: error instanceof Error ? error.message : String(error) });
-    });
-    return { type: "done", message: "Compaction started" };
+    void session.compact(instructions || undefined)
+      .then((result) => {
+        this.events.publish(session.sessionId, {
+          type: "command.output",
+          level: "success",
+          message: formatCompactionResult(result),
+        });
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.events.publish(session.sessionId, { type: "command.output", level: "error", message: `Compaction failed: ${message}` });
+        this.events.publish(session.sessionId, { type: "session.error", message });
+      });
+    return { type: "done", message: "Compaction started…" };
   }
 
   private async clone(active: ActiveSession): Promise<ClientCommandResult> {
@@ -119,6 +129,15 @@ function formatSessionStats(session: AgentSession): string {
     `Tool calls: ${stats.toolCalls}`,
     `Tokens: ↑${stats.tokens.input} ↓${stats.tokens.output} total ${stats.tokens.total}`,
     `Cost: $${stats.cost.toFixed(4)}`,
+  ].join("\n");
+}
+
+function formatCompactionResult(result: { summary: string; tokensBefore: number }): string {
+  return [
+    "Compaction complete.",
+    `Tokens before: ${result.tokensBefore}`,
+    "",
+    result.summary,
   ].join("\n");
 }
 
