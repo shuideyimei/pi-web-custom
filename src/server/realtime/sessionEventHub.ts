@@ -1,3 +1,4 @@
+import type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes.js";
 import type { WebSocket } from "ws";
 
 export class SessionEventHub {
@@ -21,14 +22,14 @@ export class SessionEventHub {
     socket.on("close", () => this.globalSockets.delete(socket));
   }
 
-  publish(sessionId: string, event: unknown): void {
+  publish(sessionId: string, event: SessionUiEvent): void {
     const payload = JSON.stringify(event);
     for (const socket of this.socketsBySession.get(sessionId) ?? []) {
       if (socket.readyState === socket.OPEN) socket.send(payload);
     }
   }
 
-  publishGlobal(event: unknown): void {
+  publishGlobal(event: GlobalSessionEvent): void {
     const payload = JSON.stringify(event);
     for (const socket of this.globalSockets) {
       if (socket.readyState === socket.OPEN) socket.send(payload);

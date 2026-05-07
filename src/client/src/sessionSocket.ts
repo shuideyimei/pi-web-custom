@@ -1,7 +1,7 @@
 import { globalSessionEvents, sessionEvents } from "./api";
-import type { SessionUiEvent } from "../../shared/apiTypes";
+import type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes";
 
-export type { SessionUiEvent } from "../../shared/apiTypes";
+export type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes";
 
 export class SessionSocket {
   private socket: WebSocket | undefined;
@@ -63,12 +63,12 @@ export class SessionSocket {
 
 export class GlobalSessionSocket {
   private socket: WebSocket | undefined;
-  private onEvent: ((event: Extract<SessionUiEvent, { type: "status.update" | "activity.update" }>) => void) | undefined;
+  private onEvent: ((event: GlobalSessionEvent) => void) | undefined;
   private reconnectTimer?: number;
   private reconnectDelay = 500;
   private shouldReconnect = false;
 
-  connect(onEvent: (event: Extract<SessionUiEvent, { type: "status.update" | "activity.update" }>) => void): void {
+  connect(onEvent: (event: GlobalSessionEvent) => void): void {
     this.close();
     this.onEvent = onEvent;
     this.shouldReconnect = true;
@@ -114,10 +114,10 @@ export class GlobalSessionSocket {
 
 function isSessionUiEvent(event: unknown): event is SessionUiEvent {
   const type = eventType(event);
-  return ["assistant.delta", "tool.start", "tool.end", "shell.start", "shell.chunk", "shell.end", "status.update", "activity.update", "command.output", "session.error"].includes(type);
+  return ["assistant.delta", "tool.start", "tool.end", "shell.start", "shell.chunk", "shell.end", "agent.start", "agent.end", "message.end", "status.update", "activity.update", "command.output", "session.error", "pi.event"].includes(type);
 }
 
-function isGlobalSessionEvent(event: unknown): event is Extract<SessionUiEvent, { type: "status.update" | "activity.update" }> {
+function isGlobalSessionEvent(event: unknown): event is GlobalSessionEvent {
   const type = eventType(event);
   return type === "status.update" || type === "activity.update";
 }

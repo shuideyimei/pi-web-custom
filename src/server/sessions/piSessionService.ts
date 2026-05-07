@@ -9,7 +9,7 @@ import {
   type AgentSession,
   type CreateAgentSessionRuntimeFactory,
 } from "@earendil-works/pi-coding-agent";
-import type { ClientCommand, ClientCommandResult, ClientMessagePage, ClientSession, ClientSessionStatus } from "../types.js";
+import type { ClientCommand, ClientCommandResult, ClientMessagePage, ClientSession, ClientSessionStatus, SessionUiEvent } from "../types.js";
 import type { SessionEventHub } from "../realtime/sessionEventHub.js";
 import { BUILTIN_COMMANDS } from "./builtinCommands.js";
 import { SessionCommandService } from "./sessionCommandService.js";
@@ -141,10 +141,10 @@ export class PiSessionService {
       this.events.publish(session.sessionId, {
         type: "shell.end",
         output: result.output,
-        exitCode: result.exitCode,
+        ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode }),
         cancelled: result.cancelled,
         truncated: result.truncated,
-        fullOutputPath: result.fullOutputPath,
+        ...(result.fullOutputPath === undefined ? {} : { fullOutputPath: result.fullOutputPath }),
       });
       this.publishActivity(session, "bash complete", result.exitCode === 0 ? "idle" : "error", command);
       this.publishStatus(session);
@@ -348,7 +348,7 @@ function clampInteger(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
-function toClientEvent(event: unknown): unknown {
+function toClientEvent(event: unknown): SessionUiEvent {
   const eventType = getString(event, "type");
   const assistantMessageEvent = getProperty(event, "assistantMessageEvent");
   if (eventType === "message_update" && getString(assistantMessageEvent, "type") === "text_delta") {

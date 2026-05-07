@@ -132,12 +132,18 @@ export type CommandResult =
 
 export type SessionUiEvent =
   | { type: "assistant.delta"; text: string }
-  | { type: "tool.start"; toolName: string; summary: string; args?: unknown }
-  | { type: "tool.end"; toolName: string; text: string; isError: boolean; content?: unknown }
+  | { type: "tool.start"; toolName: string; toolCallId: string; summary: string; args?: unknown }
+  | { type: "tool.end"; toolName: string; toolCallId: string; text: string; isError: boolean; content?: unknown }
   | { type: "shell.start"; command: string; excludeFromContext?: boolean }
   | { type: "shell.chunk"; chunk: string }
   | { type: "shell.end"; output?: string; exitCode?: number | null; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string; isError?: boolean }
+  | { type: "agent.start" }
+  | { type: "agent.end" }
+  | { type: "message.end" }
   | { type: "status.update"; status: SessionStatus }
   | { type: "activity.update"; activity: SessionActivity }
   | { type: "command.output"; level: "info" | "success" | "error"; message: string }
-  | { type: "session.error"; message: string };
+  | { type: "session.error"; message: string }
+  | { type: "pi.event"; eventType: string };
+
+export type GlobalSessionEvent = Extract<SessionUiEvent, { type: "status.update" | "activity.update" }>;
