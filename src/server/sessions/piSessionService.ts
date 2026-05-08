@@ -23,6 +23,7 @@ function noop(): void {
 
 type SessionArchiveRepository = Pick<SessionArchiveStore, "list" | "archive" | "restore" | "isArchived">;
 type SessionManagerGateway = Pick<typeof SessionManager, "list" | "create" | "listAll" | "open">;
+type CreateAgentRuntime = typeof createAgentSessionRuntime;
 
 function createDefaultRuntimeFactory(): CreateAgentSessionRuntimeFactory {
   const authStorage = AuthStorage.create();
@@ -42,6 +43,7 @@ export interface PiSessionServiceDependencies {
   agentDir?: string;
   sessionManager?: SessionManagerGateway;
   createRuntime?: CreateAgentSessionRuntimeFactory;
+  createAgentRuntime?: CreateAgentRuntime;
   modelRegistry?: ReturnType<typeof ModelRegistry.create>;
   heartbeatIntervalMs?: number;
 }
@@ -55,6 +57,7 @@ export class PiSessionService {
   private readonly agentDir: string;
   private readonly sessionManager: SessionManagerGateway;
   private readonly createRuntime: CreateAgentSessionRuntimeFactory;
+  private readonly createAgentRuntime: CreateAgentRuntime;
   private readonly modelRegistry: ReturnType<typeof ModelRegistry.create>;
 
   constructor(private readonly events: SessionEventHub, deps: PiSessionServiceDependencies = {}) {
@@ -62,6 +65,7 @@ export class PiSessionService {
     this.agentDir = deps.agentDir ?? getAgentDir();
     this.sessionManager = deps.sessionManager ?? SessionManager;
     this.createRuntime = deps.createRuntime ?? createDefaultRuntimeFactory();
+    this.createAgentRuntime = deps.createAgentRuntime ?? createAgentSessionRuntime;
     this.modelRegistry = deps.modelRegistry ?? ModelRegistry.create(AuthStorage.create());
     this.heartbeat = setInterval(() => { this.publishHeartbeats(); }, deps.heartbeatIntervalMs ?? 2000);
     this.commandService = new SessionCommandService(
@@ -254,7 +258,7 @@ export class PiSessionService {
   }
 
   private async create(sessionManager: SessionManager, cwd: string): Promise<ActiveSession> {
-    const runtime = await createAgentSessionRuntime(this.createRuntime, { cwd, agentDir: this.agentDir, sessionManager });
+    const runtime = await this.createAgentRuntime(this.createRuntime, { cwd, agentDir: this.agentDir, sessionManager });
     const active: ActiveSession = { runtime, unsubscribe: noop };
     this.bindRuntime(active);
     runtime.setRebindSession(() => {
