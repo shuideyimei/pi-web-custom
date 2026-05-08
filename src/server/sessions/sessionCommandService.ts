@@ -93,7 +93,7 @@ export class SessionCommandService {
       type: "select",
       requestId,
       title: "Fork from message",
-      options: messages.map((message) => ({ value: message.entryId, label: truncate(message.text, 140) })),
+      options: [...messages].reverse().map((message) => ({ value: message.entryId, label: truncate(message.text, 140) })),
     };
   }
 

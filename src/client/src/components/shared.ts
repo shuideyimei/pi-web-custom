@@ -197,7 +197,7 @@ export const statusBarStyles = css`
 
 export const autocompleteStyles = css`
   :host { display: block; }
-  .menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); max-height: 260px; overflow: auto; border: 1px solid #30363d; border-radius: 8px; background: #161b22; box-shadow: 0 10px 30px #0008; }
+  .menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 10; max-height: 260px; overflow: auto; border: 1px solid #30363d; border-radius: 8px; background: #161b22; box-shadow: 0 10px 30px #0008; }
   button { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 4px 10px; width: 100%; border: 0; border-bottom: 1px solid #30363d; border-radius: 0; background: transparent; color: #e6edf3; padding: 8px 10px; text-align: left; cursor: pointer; }
   button:last-child { border-bottom: 0; }
   button.selected, button:hover { background: #0d2847; }
@@ -239,7 +239,7 @@ export const actionPaletteStyles = css`
 `;
 
 export const promptEditorStyles = css`
-  :host { display: block; color: #e6edf3; font: 14px system-ui, sans-serif; }
+  :host { position: relative; z-index: 5; display: block; color: #e6edf3; font: 14px system-ui, sans-serif; }
   footer { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px; border-top: 1px solid #30363d; }
   footer.shell-mode { border-top-color: #3fb950; background: #0f1b12; }
   .editor-wrap { position: relative; min-width: 0; }

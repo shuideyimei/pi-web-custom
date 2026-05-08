@@ -96,16 +96,22 @@ describe("SessionCommandService", () => {
     expect(active.runtime.session.compact).toHaveBeenCalledWith("focus on tests");
   });
 
-  it("creates fork selection requests and responds with selected entry", async () => {
-    const active = activeSession();
+  it("creates fork selection requests from newest message to oldest and responds with selected entry", async () => {
+    const active = activeSession({
+      getUserMessagesForForking: vi.fn(() => [
+        { entryId: "oldest", text: "oldest message" },
+        { entryId: "middle", text: "middle message" },
+        { entryId: "newest", text: "newest message" },
+      ]),
+    });
     const service = new SessionCommandService(() => getActive(active), vi.fn(), { publish: vi.fn() } as never);
 
     const result = await service.run("s1", "/fork");
 
-    expect(result).toMatchObject({ type: "select", title: "Fork from message", options: [{ value: "m1" }] });
+    expect(result).toMatchObject({ type: "select", title: "Fork from message", options: [{ value: "newest" }, { value: "middle" }, { value: "oldest" }] });
     if (result.type !== "select") throw new Error("Expected select result");
-    await expect(service.respond("s1", result.requestId, "m1")).resolves.toMatchObject({ type: "done", message: "Session forked", session: { id: "s1" } });
-    expect(active.runtime.fork).toHaveBeenCalledWith("m1");
-    await expect(service.respond("s1", result.requestId, "m1")).resolves.toEqual({ type: "unsupported", message: "Command request expired" });
+    await expect(service.respond("s1", result.requestId, "newest")).resolves.toMatchObject({ type: "done", message: "Session forked", session: { id: "s1" } });
+    expect(active.runtime.fork).toHaveBeenCalledWith("newest");
+    await expect(service.respond("s1", result.requestId, "newest")).resolves.toEqual({ type: "unsupported", message: "Command request expired" });
   });
 });
