@@ -28,7 +28,7 @@
     "start": "tsx src/server/index.ts",
     "start:sessiond": "tsx src/server/sessiond.ts",
     "clean": "rm -rf dist",
-    "prepare": "npm run build",
+    "prepare": "sh -c 'command -v tsc >/dev/null 2>&1 && command -v vite >/dev/null 2>&1 || npm install --include=dev --ignore-scripts; npm run build'",
     "pack:dry": "npm pack --dry-run",
     "prepublishOnly": "npm run verify",
     "publish:npm": "npm publish --access public"

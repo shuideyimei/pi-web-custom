@@ -133,7 +133,7 @@ npm install -g github:jmfederico/pi-web#main
 pi-web install
 ```
 
-This uses npm's git install flow and runs the package `prepare` script to build `dist/` on the target machine.
+This uses npm's git install flow and runs the package `prepare` script to install build-time dev dependencies if needed, then build `dist/` on the target machine.
 
 ## Development quick start
 
