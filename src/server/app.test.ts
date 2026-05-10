@@ -19,6 +19,10 @@ beforeEach(async () => {
   app = await buildApp({
     projects: new ProjectService(new ProjectStore(join(tempDir, "projects.json"))),
     workspaces: new WorkspaceService(),
+    piWebPlugins: {
+      manifest: () => Promise.resolve({ plugins: [{ id: "fake", module: "/pi-web-plugins/fake/plugin.js?v=1", source: "test", scope: "local" }] }),
+      readAsset: (pluginId, assetPath) => Promise.resolve(pluginId === "fake" && assetPath === "plugin.js" ? { content: Buffer.from("export default {};"), contentType: "application/javascript; charset=utf-8" } : undefined),
+    },
     clientDist: false,
     logger: false,
   });
@@ -52,6 +56,20 @@ describe("buildApp", () => {
 
     const emptyListResponse = await app.inject({ method: "GET", url: "/api/projects" });
     expect(emptyListResponse.json<Project[]>()).toEqual([]);
+  });
+
+  it("serves the Pi Web plugin manifest and plugin assets", async () => {
+    const manifestResponse = await app.inject({ method: "GET", url: "/pi-web-plugins/manifest.json" });
+    expect(manifestResponse.statusCode).toBe(200);
+    expect(manifestResponse.json()).toEqual({ plugins: [{ id: "fake", module: "/pi-web-plugins/fake/plugin.js?v=1", source: "test", scope: "local" }] });
+
+    const assetResponse = await app.inject({ method: "GET", url: "/pi-web-plugins/fake/plugin.js?v=1" });
+    expect(assetResponse.statusCode).toBe(200);
+    expect(assetResponse.headers["content-type"]).toContain("application/javascript");
+    expect(assetResponse.body).toBe("export default {};");
+
+    const missingResponse = await app.inject({ method: "GET", url: "/pi-web-plugins/fake/missing.js" });
+    expect(missingResponse.statusCode).toBe(404);
   });
 
   it("returns stable errors for invalid project requests", async () => {

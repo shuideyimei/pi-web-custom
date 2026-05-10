@@ -18,6 +18,7 @@ import { PiWebPluginService } from "./piWebPluginService.js";
 export interface AppDependencies {
   projects?: ProjectService;
   workspaces?: WorkspaceService;
+  piWebPlugins?: Pick<PiWebPluginService, "manifest" | "readAsset">;
   clientDist?: string | false;
   logger?: FastifyServerOptions["logger"];
 }
@@ -28,7 +29,7 @@ export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInsta
 
   const projects = deps.projects ?? new ProjectService(new ProjectStore());
   const workspaces = deps.workspaces ?? new WorkspaceService();
-  const piWebPlugins = new PiWebPluginService();
+  const piWebPlugins = deps.piWebPlugins ?? new PiWebPluginService();
 
   app.get("/pi-web-plugins/manifest.json", async () => piWebPlugins.manifest());
 
