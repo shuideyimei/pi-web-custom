@@ -64,6 +64,7 @@ export interface WorkspacePanelContext {
   selectedDiff: GitDiffResponse | undefined;
   selectedStagedDiff: GitDiffResponse | undefined;
   gitStale: boolean;
+  activeTerminalCount: number;
   onRefreshFiles: () => void;
   onExpandDir: (path: string) => void;
   onSelectFile: (path: string) => void;
@@ -76,6 +77,7 @@ export interface WorkspacePanelContribution {
   title: string;
   order?: number;
   visible?: (workspace: Workspace) => boolean;
+  badge?: (context: WorkspacePanelContext) => string | number | TemplateResult | undefined;
   render: (context: WorkspacePanelContext) => TemplateResult;
 }
 

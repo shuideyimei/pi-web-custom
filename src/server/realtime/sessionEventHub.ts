@@ -1,4 +1,4 @@
-import type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes.js";
+import type { GlobalSessionEvent, RealtimeEvent, SessionUiEvent } from "../../shared/apiTypes.js";
 import type { WebSocket } from "ws";
 
 export class SessionEventHub {
@@ -30,6 +30,10 @@ export class SessionEventHub {
   }
 
   publishGlobal(event: GlobalSessionEvent): void {
+    this.publishRealtime(event);
+  }
+
+  publishRealtime(event: RealtimeEvent): void {
     const payload = JSON.stringify(event);
     for (const socket of this.globalSockets) {
       if (socket.readyState === socket.OPEN) socket.send(payload);

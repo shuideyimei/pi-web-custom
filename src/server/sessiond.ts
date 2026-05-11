@@ -15,7 +15,7 @@ await app.register(fastifyWebsocket);
 
 const eventHub = new SessionEventHub();
 const sessions = new PiSessionService(eventHub);
-const terminals = new TerminalService();
+const terminals = new TerminalService(eventHub);
 registerSessionRoutes(app, sessions, eventHub);
 registerTerminalRoutes(app, terminals);
 

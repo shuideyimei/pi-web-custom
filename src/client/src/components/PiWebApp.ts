@@ -1,6 +1,6 @@
 import { LitElement, html } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
-import type { Project, SessionInfo, ThinkingLevel, Workspace } from "../api";
+import { terminalsApi, type Project, type RealtimeEvent, type SessionInfo, type TerminalUiEvent, type ThinkingLevel, type Workspace } from "../api";
 import type { AppAction } from "../actions";
 import { initialAppState, type AppState } from "../appState";
 import { FileExplorerController } from "../controllers/fileExplorerController";
@@ -9,7 +9,8 @@ import { ProjectController } from "../controllers/projectController";
 import { SessionController } from "../controllers/sessionController";
 import { WorkspaceController } from "../controllers/workspaceController";
 import { KeyboardShortcutDispatcher } from "../keyboardShortcuts";
-import type { QualifiedContributionId, QualifiedWorkspacePanelContribution, PluginRuntimeContext } from "../plugins/types";
+import { RealtimeSocket } from "../sessionSocket";
+import type { QualifiedContributionId, QualifiedWorkspacePanelContribution, PluginRuntimeContext, WorkspacePanelContext } from "../plugins/types";
 import { corePlugin } from "../plugins/core";
 import { loadExternalPlugins } from "../plugins/external";
 import { PluginRegistry } from "../plugins/registry";
@@ -62,6 +63,8 @@ export class PiWebApp extends LitElement {
     () => { this.updateUrl(); },
   );
   private readonly keyboard = new KeyboardShortcutDispatcher();
+  private readonly realtime = new RealtimeSocket();
+  private readonly activeTerminalIds = new Set<string>();
   private readonly plugins = createPluginRegistry();
   private readonly onPopState = () => void this.withChatScrollTransition(() => this.restoreRoute(false));
   private readonly onKeyDown = (event: KeyboardEvent) => {
@@ -75,7 +78,7 @@ export class PiWebApp extends LitElement {
     super.connectedCallback();
     window.addEventListener("popstate", this.onPopState);
     window.addEventListener("keydown", this.onKeyDown);
-    this.sessions.connectStatusUpdates();
+    this.connectRealtime();
     void this.loadExternalPlugins();
     void this.loadProjectsAndRestoreRoute();
   }
@@ -85,6 +88,7 @@ export class PiWebApp extends LitElement {
     window.removeEventListener("keydown", this.onKeyDown);
     this.keyboard.reset();
     this.sessions.dispose();
+    this.realtime.close();
     this.git.dispose();
     super.disconnectedCallback();
   }
@@ -167,9 +171,52 @@ export class PiWebApp extends LitElement {
   }
 
   private handleWorkspaceChange(previous: AppState, next: AppState) {
-    if (previous.selectedWorkspace?.id === next.selectedWorkspace?.id || next.selectedWorkspace === undefined) return;
+    if (previous.selectedWorkspace?.id === next.selectedWorkspace?.id) return;
+    this.activeTerminalIds.clear();
+    this.setState({ activeTerminalCount: 0 });
+    if (next.selectedWorkspace === undefined) return;
+    void this.refreshActiveTerminals(next.selectedWorkspace);
     this.refreshSelectedWorkspaceTool(next.workspaceTool);
     this.git.updatePolling();
+  }
+
+  private connectRealtime(): void {
+    this.realtime.connect(
+      (event) => { this.handleRealtimeEvent(event); },
+      () => {
+        const workspace = this.state.selectedWorkspace;
+        if (workspace !== undefined) void this.refreshActiveTerminals(workspace);
+      },
+    );
+  }
+
+  private handleRealtimeEvent(event: RealtimeEvent): void {
+    if (isTerminalEvent(event)) this.applyTerminalEvent(event);
+    else this.sessions.applyGlobalEvent(event);
+  }
+
+  private applyTerminalEvent(event: TerminalUiEvent): void {
+    const workspace = this.state.selectedWorkspace;
+    if (workspace === undefined) return;
+    const cwd = event.type === "terminal.closed" ? event.cwd : event.terminal.cwd;
+    if (cwd !== workspace.path) return;
+    if (event.type === "terminal.created" && !event.terminal.exited) this.activeTerminalIds.add(event.terminal.id);
+    else this.activeTerminalIds.delete(event.type === "terminal.closed" ? event.terminalId : event.terminal.id);
+    this.setState({ activeTerminalCount: this.activeTerminalIds.size });
+  }
+
+  private async refreshActiveTerminals(workspace: Workspace): Promise<void> {
+    try {
+      const terminals = await terminalsApi.terminals(workspace.projectId, workspace.id);
+      if (this.state.selectedWorkspace?.id !== workspace.id) return;
+      this.activeTerminalIds.clear();
+      for (const terminal of terminals) {
+        if (!terminal.exited) this.activeTerminalIds.add(terminal.id);
+      }
+      this.setState({ activeTerminalCount: this.activeTerminalIds.size });
+    } catch (error) {
+      this.setState({ error: String(error) });
+    }
   }
 
   private handleActivityTransition(previous: AppState, next: AppState) {
@@ -188,7 +235,7 @@ export class PiWebApp extends LitElement {
 
   private renderWorkspacePanel(hideToolTabs = false) {
     const workspaceLabelItems = this.state.selectedWorkspace === undefined ? [] : this.plugins.getWorkspaceLabelItems(this.state, this.state.selectedWorkspace);
-    return html`<workspace-panel .workspace=${this.state.selectedWorkspace} .tool=${this.state.workspaceTool} .panels=${this.visibleWorkspacePanels()} .workspaceLabelItems=${workspaceLabelItems} .hideToolTabs=${hideToolTabs} .fileTree=${this.state.fileTree} .expandedDirs=${this.state.expandedDirs} .selectedFilePath=${this.state.selectedFilePath} .selectedFileContent=${this.state.selectedFileContent} .fileTreeStale=${this.state.fileTreeStale} .gitStatus=${this.state.gitStatus} .selectedDiffPath=${this.state.selectedDiffPath} .selectedDiff=${this.state.selectedDiff} .selectedStagedDiff=${this.state.selectedStagedDiff} .gitStale=${this.state.gitStale} .onSelectTool=${(tool: QualifiedContributionId) => { this.selectWorkspaceTool(tool); }} .onRefreshFiles=${() => this.files.refreshFiles()} .onExpandDir=${(path: string) => this.files.expandDir(path)} .onSelectFile=${(path: string) => this.files.selectFile(path)} .onRefreshGit=${() => this.git.refreshGit()} .onSelectDiff=${(path: string) => this.git.selectDiff(path)}></workspace-panel>`;
+    return html`<workspace-panel .workspace=${this.state.selectedWorkspace} .tool=${this.state.workspaceTool} .panels=${this.visibleWorkspacePanels()} .workspaceLabelItems=${workspaceLabelItems} .hideToolTabs=${hideToolTabs} .fileTree=${this.state.fileTree} .expandedDirs=${this.state.expandedDirs} .selectedFilePath=${this.state.selectedFilePath} .selectedFileContent=${this.state.selectedFileContent} .fileTreeStale=${this.state.fileTreeStale} .gitStatus=${this.state.gitStatus} .selectedDiffPath=${this.state.selectedDiffPath} .selectedDiff=${this.state.selectedDiff} .selectedStagedDiff=${this.state.selectedStagedDiff} .gitStale=${this.state.gitStale} .activeTerminalCount=${this.state.activeTerminalCount} .onSelectTool=${(tool: QualifiedContributionId) => { this.selectWorkspaceTool(tool); }} .onRefreshFiles=${() => this.files.refreshFiles()} .onExpandDir=${(path: string) => this.files.expandDir(path)} .onSelectFile=${(path: string) => this.files.selectFile(path)} .onRefreshGit=${() => this.git.refreshGit()} .onSelectDiff=${(path: string) => this.git.selectDiff(path)}></workspace-panel>`;
   }
 
   private renderNavigationPanel(autoSwitchToChat: boolean) {
@@ -211,6 +258,36 @@ export class PiWebApp extends LitElement {
   private visibleWorkspacePanels(): QualifiedWorkspacePanelContribution[] {
     const workspace = this.state.selectedWorkspace;
     return this.plugins.getWorkspacePanels().filter((panel) => workspace === undefined || (panel.visible?.(workspace) ?? true));
+  }
+
+  private renderMobilePanelTitle(panel: QualifiedWorkspacePanelContribution) {
+    const workspace = this.state.selectedWorkspace;
+    if (workspace === undefined) return panel.title;
+    const badge = panel.badge?.(this.createWorkspacePanelContext(workspace));
+    if (badge === undefined || badge === "") return panel.title;
+    return html`${panel.title} <span class="tab-badge">${badge}</span>`;
+  }
+
+  private createWorkspacePanelContext(workspace: Workspace): WorkspacePanelContext {
+    return {
+      workspace,
+      fileTree: this.state.fileTree,
+      expandedDirs: this.state.expandedDirs,
+      selectedFilePath: this.state.selectedFilePath,
+      selectedFileContent: this.state.selectedFileContent,
+      fileTreeStale: this.state.fileTreeStale,
+      gitStatus: this.state.gitStatus,
+      selectedDiffPath: this.state.selectedDiffPath,
+      selectedDiff: this.state.selectedDiff,
+      selectedStagedDiff: this.state.selectedStagedDiff,
+      gitStale: this.state.gitStale,
+      activeTerminalCount: this.state.activeTerminalCount,
+      onRefreshFiles: () => this.files.refreshFiles(),
+      onExpandDir: (path: string) => this.files.expandDir(path),
+      onSelectFile: (path: string) => this.files.selectFile(path),
+      onRefreshGit: () => this.git.refreshGit(),
+      onSelectDiff: (path: string) => this.git.selectDiff(path),
+    };
   }
 
   private getActions(): AppAction[] {
@@ -299,7 +376,7 @@ export class PiWebApp extends LitElement {
             <button class=${state.mainView === "navigation" ? "mobile-navigation-tab selected" : "mobile-navigation-tab"} @click=${() => { this.selectMainView("navigation"); }}>Sessions</button>
             <button class=${state.mainView === "chat" ? "selected" : ""} @click=${() => { this.selectMainView("chat"); }}>Chat</button>
             ${this.visibleWorkspacePanels().map((panel) => html`
-              <button class=${state.mainView === panel.id ? "selected" : ""} @click=${() => { this.selectMainView(panel.id); }}>${panel.title}</button>
+              <button class=${state.mainView === panel.id ? "selected" : ""} @click=${() => { this.selectMainView(panel.id); }}>${this.renderMobilePanelTitle(panel)}</button>
             `)}
           </div>
           ${state.error ? html`<div class="error">${state.error}</div>` : null}
@@ -332,6 +409,10 @@ function createPluginRegistry(): PluginRegistry {
 
 function isActive(status: AppState["status"]): boolean {
   return status?.isStreaming === true || status?.isBashRunning === true || status?.isCompacting === true;
+}
+
+function isTerminalEvent(event: RealtimeEvent): event is TerminalUiEvent {
+  return event.type === "terminal.created" || event.type === "terminal.exited" || event.type === "terminal.closed";
 }
 
 function nextFrame(): Promise<void> {

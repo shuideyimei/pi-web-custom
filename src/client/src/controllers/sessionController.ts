@@ -5,29 +5,25 @@ import { normalizeMessages, textMessage } from "../chatMessages";
 import { readChatHistoryCache, mergeChatHistory, writeChatHistoryCache, type RawMessagePage } from "../chatHistoryCache";
 import { applyTranscriptEvent } from "../chatTranscript";
 import { isShellInput } from "../inputModes";
-import { GlobalSessionSocket, SessionSocket, type SessionUiEvent } from "../sessionSocket";
+import { SessionSocket, type GlobalSessionEvent, type SessionUiEvent } from "../sessionSocket";
 import { markSessionArchived, selectionAfterArchivingSession } from "./sessionSelection";
 import type { GetState, SetState, UpdateUrl } from "./types";
 
 export class SessionController {
   private readonly socket = new SessionSocket();
-  private readonly globalSocket = new GlobalSessionSocket();
   private selectionSeq = 0;
   private catchupStreamSessionId: string | undefined;
 
   constructor(private readonly getState: GetState, private readonly setState: SetState, private readonly updateUrl: UpdateUrl) {}
 
-  connectStatusUpdates() {
-    this.globalSocket.connect((event) => {
-      if (event.type === "status.update") this.applyStatus(event.status);
-      else if (event.type === "activity.update") this.applyActivity(event.activity);
-      else this.applySessionName(event.sessionId, event.name);
-    });
+  applyGlobalEvent(event: GlobalSessionEvent): void {
+    if (event.type === "status.update") this.applyStatus(event.status);
+    else if (event.type === "activity.update") this.applyActivity(event.activity);
+    else this.applySessionName(event.sessionId, event.name);
   }
 
   dispose() {
     this.socket.close();
-    this.globalSocket.close();
   }
 
   clearActiveSession() {

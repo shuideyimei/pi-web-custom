@@ -39,6 +39,7 @@ export const appStyles = css`
   .mobile-tabs { display: none; flex: 0 0 auto; gap: 6px; padding: 8px; border-bottom: 1px solid #30363d; overflow-x: auto; }
   .mobile-navigation-tab, .mobile-navigation-panel, .mobile-panel { display: none; }
   .mobile-tabs button.selected { border-color: #58a6ff; background: #0d2847; }
+  .tab-badge { display: inline-block; min-width: 14px; margin-left: 4px; border: 1px solid #238636; border-radius: 999px; background: #0f2a16; color: #3fb950; padding: 0 5px; font-size: 11px; line-height: 16px; text-align: center; }
   workspace-panel { min-width: 0; min-height: 0; border-left: 1px solid #30363d; overflow: hidden; }
   @media (max-width: 1180px) {
     .shell { grid-template-columns: 340px minmax(0, 1fr); }
@@ -70,8 +71,10 @@ export const workspacePanelStyles = css`
   :host { display: flex; flex-direction: column; min-height: 0; color: #e6edf3; background: #0d1117; font: 13px system-ui, sans-serif; }
   header { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid #30363d; }
   .tabs { display: flex; gap: 6px; }
-  button { border: 1px solid #30363d; border-radius: 7px; background: #161b22; color: #e6edf3; padding: 5px 7px; cursor: pointer; }
+  button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #30363d; border-radius: 7px; background: #161b22; color: #e6edf3; padding: 5px 7px; cursor: pointer; }
   button.selected { border-color: #58a6ff; background: #0d2847; }
+  .tab-badge { display: inline-block; min-width: 14px; border: 1px solid #238636; border-radius: 999px; background: #0f2a16; color: #3fb950; padding: 0 5px; font-size: 11px; line-height: 16px; text-align: center; }
+  .panel-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   small, .muted { color: #8b949e; }
   header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-label { min-width: 0; display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; overflow: hidden; white-space: nowrap; }

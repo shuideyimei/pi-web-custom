@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, type TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Workspace } from "../api";
 import type { QualifiedContributionId, QualifiedWorkspacePanelContribution, WorkspaceLabelItem, WorkspacePanelContext } from "../plugins/types";
@@ -28,25 +28,37 @@ export class WorkspacePanel extends LitElement {
   @property({ attribute: false }) onSelectFile: (path: string) => void = () => undefined;
   @property({ attribute: false }) onRefreshGit: () => void = () => undefined;
   @property({ attribute: false }) onSelectDiff: (path: string) => void = () => undefined;
+  @property({ type: Number }) activeTerminalCount = 0;
 
   override render() {
     const workspace = this.workspace;
     if (workspace === undefined) return html`<section class="empty">Select a workspace.</section>`;
     const visiblePanels = this.panels.filter((panel) => panel.visible?.(workspace) ?? true);
     const selectedPanel = visiblePanels.find((panel) => panel.id === this.tool) ?? visiblePanels[0];
+    const context = this.createPanelContext(workspace);
     return html`
       <header>
         ${this.hideToolTabs ? null : html`
           <div class="tabs">
             ${visiblePanels.map((panel) => html`
-              <button class=${selectedPanel?.id === panel.id ? "selected" : ""} @click=${() => { this.onSelectTool(panel.id); }}>${panel.title}</button>
+              <button class=${selectedPanel?.id === panel.id ? "selected" : ""} @click=${() => { this.onSelectTool(panel.id); }}>${this.renderPanelTitle(panel, context)}</button>
             `)}
           </div>
         `}
         <small>${renderWorkspaceLabel(workspace.label, this.workspaceLabelItems, workspace.path)}</small>
       </header>
-      ${selectedPanel === undefined ? html`<section class="empty">No workspace panels registered.</section>` : selectedPanel.render(this.createPanelContext(workspace))}
+      ${selectedPanel === undefined ? html`<section class="empty">No workspace panels registered.</section>` : html`
+        <div class="panel-content">
+          ${selectedPanel.render(context)}
+        </div>
+      `}
     `;
+  }
+
+  private renderPanelTitle(panel: QualifiedWorkspacePanelContribution, context: WorkspacePanelContext): TemplateResult {
+    const badge = panel.badge?.(context);
+    if (badge === undefined || badge === "") return html`${panel.title}`;
+    return html`${panel.title} <span class="tab-badge">${badge}</span>`;
   }
 
   private createPanelContext(workspace: Workspace): WorkspacePanelContext {
@@ -62,6 +74,7 @@ export class WorkspacePanel extends LitElement {
       selectedDiff: this.selectedDiff,
       selectedStagedDiff: this.selectedStagedDiff,
       gitStale: this.gitStale,
+      activeTerminalCount: this.activeTerminalCount,
       onRefreshFiles: this.onRefreshFiles,
       onExpandDir: this.onExpandDir,
       onSelectFile: this.onSelectFile,

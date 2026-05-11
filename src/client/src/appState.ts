@@ -35,6 +35,7 @@ export interface AppState {
   selectedDiff: GitDiffResponse | undefined;
   selectedStagedDiff: GitDiffResponse | undefined;
   gitStale: boolean;
+  activeTerminalCount: number;
   error: string;
 }
 
@@ -72,6 +73,7 @@ export function initialAppState(): AppState {
     selectedDiff: undefined,
     selectedStagedDiff: undefined,
     gitStale: false,
+    activeTerminalCount: 0,
     error: "",
   };
 }

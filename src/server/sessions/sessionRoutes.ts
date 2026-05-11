@@ -167,6 +167,10 @@ export function registerSessionRoutes(app: FastifyInstance, sessions: PiSessionS
   app.get(`${prefix}/sessions/events`, { websocket: true }, (socket) => {
     eventHub.addGlobal(socket);
   });
+
+  app.get(`${prefix}/events`, { websocket: true }, (socket) => {
+    eventHub.addGlobal(socket);
+  });
 }
 
 function optionalField<T>(key: string, value: T | undefined): Record<string, T> | object {

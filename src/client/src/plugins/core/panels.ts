@@ -21,6 +21,7 @@ export function createCoreWorkspacePanels(): WorkspacePanelContribution[] {
       id: "workspace.terminal",
       title: "Terminal",
       order: 30,
+      badge: (context) => context.activeTerminalCount > 0 ? context.activeTerminalCount : undefined,
       render: renderTerminal,
     },
   ];

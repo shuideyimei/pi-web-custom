@@ -148,6 +148,11 @@ export interface TerminalInfo {
   exitCode?: number;
 }
 
+export type TerminalUiEvent =
+  | { type: "terminal.created"; terminal: TerminalInfo }
+  | { type: "terminal.exited"; terminal: TerminalInfo }
+  | { type: "terminal.closed"; terminalId: string; cwd: string };
+
 export interface CommandOption {
   value: string;
   label: string;
@@ -185,3 +190,4 @@ export type SessionUiEvent =
   | { type: "pi.event"; eventType: string };
 
 export type GlobalSessionEvent = Extract<SessionUiEvent, { type: "status.update" | "activity.update" | "session.name" }>;
+export type RealtimeEvent = GlobalSessionEvent | TerminalUiEvent;

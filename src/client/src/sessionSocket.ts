@@ -1,7 +1,7 @@
-import { globalSessionEvents, sessionEvents } from "./api";
-import type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes";
+import { globalSessionEvents, realtimeEvents, sessionEvents } from "./api";
+import type { GlobalSessionEvent, RealtimeEvent, SessionUiEvent } from "../../shared/apiTypes";
 
-export type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes";
+export type { GlobalSessionEvent, RealtimeEvent, SessionUiEvent } from "../../shared/apiTypes";
 
 export class SessionSocket {
   private socket: WebSocket | undefined;
@@ -58,6 +58,61 @@ export class SessionSocket {
   private async handleMessage(data: MessageEvent["data"]): Promise<void> {
     const event = await parseSocketEvent(data);
     if (isSessionUiEvent(event)) this.onEvent?.(event);
+  }
+}
+
+export class RealtimeSocket {
+  private socket: WebSocket | undefined;
+  private onEvent: ((event: RealtimeEvent) => void) | undefined;
+  private onOpen: (() => void) | undefined;
+  private reconnectTimer?: number;
+  private reconnectDelay = 500;
+  private shouldReconnect = false;
+
+  connect(onEvent: (event: RealtimeEvent) => void, onOpen?: () => void): void {
+    this.close();
+    this.onEvent = onEvent;
+    this.onOpen = onOpen;
+    this.shouldReconnect = true;
+    this.open();
+  }
+
+  close(): void {
+    this.shouldReconnect = false;
+    window.clearTimeout(this.reconnectTimer);
+    closeSocketQuietly(this.socket);
+    this.socket = undefined;
+    this.onEvent = undefined;
+    this.onOpen = undefined;
+  }
+
+  private open(): void {
+    if (!this.shouldReconnect) return;
+    const socket = realtimeEvents();
+    this.socket = socket;
+    socket.onopen = () => {
+      this.reconnectDelay = 500;
+      this.onOpen?.();
+    };
+    socket.onmessage = (message) => void this.handleMessage(message.data);
+    socket.onerror = () => { socket.close(); };
+    socket.onclose = () => {
+      if (this.socket === socket) this.socket = undefined;
+      this.scheduleReconnect();
+    };
+  }
+
+  private scheduleReconnect(): void {
+    if (!this.shouldReconnect) return;
+    window.clearTimeout(this.reconnectTimer);
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 1.6, 5000);
+    this.reconnectTimer = window.setTimeout(() => { this.open(); }, delay);
+  }
+
+  private async handleMessage(data: MessageEvent["data"]): Promise<void> {
+    const event = await parseSocketEvent(data);
+    if (isRealtimeEvent(event)) this.onEvent?.(event);
   }
 }
 
@@ -120,6 +175,11 @@ function isSessionUiEvent(event: unknown): event is SessionUiEvent {
 function isGlobalSessionEvent(event: unknown): event is GlobalSessionEvent {
   const type = eventType(event);
   return type === "status.update" || type === "activity.update" || type === "session.name";
+}
+
+function isRealtimeEvent(event: unknown): event is RealtimeEvent {
+  const type = eventType(event);
+  return isGlobalSessionEvent(event) || type === "terminal.created" || type === "terminal.exited" || type === "terminal.closed";
 }
 
 function eventType(event: unknown): string {
