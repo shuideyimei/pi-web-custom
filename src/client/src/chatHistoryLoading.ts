@@ -8,7 +8,7 @@ export interface ChatHistoryLoadState {
   topThreshold?: number;
 }
 
-const DEFAULT_TOP_THRESHOLD = 64;
+const DEFAULT_TOP_THRESHOLD = 600;
 const VIEWPORT_FILL_TOLERANCE = 1;
 
 export function shouldRequestEarlierMessages(state: ChatHistoryLoadState): boolean {
@@ -16,8 +16,8 @@ export function shouldRequestEarlierMessages(state: ChatHistoryLoadState): boole
   return isNearTop(state) || doesNotFillViewport(state);
 }
 
-export function isNearTop(state: Pick<ChatHistoryLoadState, "scrollTop" | "topThreshold">): boolean {
-  return state.scrollTop < (state.topThreshold ?? DEFAULT_TOP_THRESHOLD);
+export function isNearTop(state: Pick<ChatHistoryLoadState, "scrollTop" | "clientHeight" | "topThreshold">): boolean {
+  return state.scrollTop < (state.topThreshold ?? Math.max(DEFAULT_TOP_THRESHOLD, state.clientHeight));
 }
 
 export function doesNotFillViewport(state: Pick<ChatHistoryLoadState, "scrollHeight" | "clientHeight">): boolean {

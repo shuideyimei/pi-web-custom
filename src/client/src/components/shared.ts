@@ -145,7 +145,8 @@ export const listStyles = css`
 export const chatStyles = css`
   :host { display: flex; flex-direction: column; min-height: 0; overflow: hidden; color: #e6edf3; font: 14px system-ui, sans-serif; }
   .chat-wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  .chat { height: 100%; min-height: 0; overflow: auto; padding: 16px 16px 64px; box-sizing: border-box; }
+  .chat { height: 100%; min-height: 0; overflow: auto; overflow-anchor: none; padding: 16px 16px 64px; box-sizing: border-box; }
+  .scroll-marker { display: block; height: 0; overflow: hidden; pointer-events: none; }
   .history-indicator { position: absolute; top: 10px; right: 18px; z-index: 2; display: grid; gap: 2px; max-width: min(320px, calc(100% - 36px)); border: 1px solid #30363d; border-radius: 8px; background: #0d1117dd; color: #8b949e; padding: 6px 8px; font-size: 12px; text-align: right; pointer-events: none; box-shadow: 0 8px 24px #0006; }
   .activity-dock { position: absolute; left: 16px; right: 16px; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 8px; min-width: 0; box-sizing: border-box; border: 1px solid #30363d; border-radius: 999px; background: #0d1117e6; color: #8b949e; padding: 8px 12px; font-size: 13px; pointer-events: none; box-shadow: 0 8px 28px #0008; backdrop-filter: blur(6px); }
   .activity-dock.active { border-color: #238636; color: #3fb950; background: #0f1b12ee; }

@@ -141,12 +141,9 @@ export class PiWebApp extends LitElement {
   }
 
   private async withChatPrependTransition(action: () => Promise<void>) {
-    const anchor = this.chatView?.capturePrependScrollAnchor();
     await action();
     await this.updateComplete;
     await this.chatView?.updateComplete;
-    await nextFrame();
-    this.chatView?.restorePrependScrollAnchor(anchor);
   }
 
   private updateUrl(options?: { replace?: boolean | undefined }) {

@@ -40,8 +40,13 @@ describe("chat history loading decisions", () => {
     expect(doesNotFillViewport({ scrollHeight: 502, clientHeight: 500 })).toBe(false);
   });
 
+  it("uses the larger of the default threshold and viewport height", () => {
+    expect(isNearTop({ scrollTop: 700, clientHeight: 800 })).toBe(true);
+    expect(isNearTop({ scrollTop: 800, clientHeight: 800 })).toBe(false);
+  });
+
   it("allows a custom top threshold", () => {
-    expect(isNearTop({ scrollTop: 80, topThreshold: 100 })).toBe(true);
-    expect(isNearTop({ scrollTop: 100, topThreshold: 100 })).toBe(false);
+    expect(isNearTop({ scrollTop: 80, clientHeight: 500, topThreshold: 100 })).toBe(true);
+    expect(isNearTop({ scrollTop: 100, clientHeight: 500, topThreshold: 100 })).toBe(false);
   });
 });
