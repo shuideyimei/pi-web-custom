@@ -23,7 +23,7 @@
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="home-page">
     <header class="site-header">
       <nav class="container nav" aria-label="Main navigation">
         <a class="brand" href="./" aria-label="Pi Web home">Pi Web</a>
@@ -41,7 +41,16 @@
         <div class="container hero-grid">
           <div>
             <p class="eyebrow"><span class="pulse"></span> A cockpit for agentic development</p>
-            <h1>Your agents keep working. <span class="gradient-text">You just need a browser.</span></h1>
+            <h1>
+              <span class="title-context">Your agents keep working.</span>
+              <span class="gradient-text intro-target" aria-label="You just need a browser.">
+                <span class="intro-word" style="--i: 0">You</span>
+                <span class="intro-word" style="--i: 1">just</span>
+                <span class="intro-word" style="--i: 2">need</span>
+                <span class="intro-word" style="--i: 3">a</span>
+                <span class="intro-word" style="--i: 4">browser.</span>
+              </span>
+            </h1>
             <p class="hero-lede">
               Pi Web runs Pi Coding Agent sessions in real server-side workspaces, keeps them alive when your browser
               leaves, and gives you a fast web surface to supervise, redirect, and review the work.
