@@ -24,13 +24,19 @@
     ],
     "types": [
       "node"
-    ]
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@jmfederico/pi-web/plugin-api": ["./plugin-api.d.ts"]
+    }
   },
   "include": [
     "src/**/*.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "extensions/**/*.ts",
-    "pi-web-plugins/**/*.ts"
+    "pi-web-plugins/**/*.ts",
+    "plugins/**/*.ts",
+    "plugin-api.d.ts"
   ]
 }

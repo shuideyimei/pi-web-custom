@@ -127,6 +127,29 @@ ln -s /path/to/plugin-folder ~/.pi-web/plugins/plugin-id
 
 Reload the Pi Web browser tab. Pi Web serves plugin modules with an mtime-based `?v=` cache buster. After editing a plugin, hard reload the browser if you do not see changes.
 
+## First-party separate plugin packages
+
+First-party plugins that are published as their own npm packages can live in this repository under `plugins/*` as npm workspaces. These packages are **not bundled** into the main `@jmfederico/pi-web` npm package automatically; they are separate packages that share CI, tests, and local development tooling with the main repo.
+
+A separate plugin package should:
+
+- use type-only imports from `@jmfederico/pi-web/plugin-api` when it needs shared Pi Web plugin interfaces; this subpath is currently a `.d.ts`-only dogfooding surface, not a runtime JavaScript module;
+- keep its Pi Web metadata in its own `package.json` with `piWeb.plugins` entries pointing at built JavaScript in `dist/`;
+- include a package-level `build` script and `prepack` script so `npm pack --workspace <package>` and `npm publish --workspace <package>` produce a usable plugin package;
+- use a local symlink into `~/.pi-web/plugins/<plugin-id>` while developing;
+- document any private Pi Web APIs it dogfoods until those APIs become stable plugin runtime helpers.
+
+Typical local development loop:
+
+```bash
+npm --workspace @jmfederico/pi-web-actions run dev
+mkdir -p ~/.pi-web/plugins
+ln -s /path/to/pi-web/plugins/actions ~/.pi-web/plugins/actions
+curl http://127.0.0.1:8504/pi-web-plugins/manifest.json
+```
+
+The main Pi Web `dev:web` script watches bundled plugins in `pi-web-plugins/`. Separate workspace packages should run their own package-level watcher when needed.
+
 ## Discovery and packaging
 
 Pi Web builds `/pi-web-plugins/manifest.json` from these sources:
