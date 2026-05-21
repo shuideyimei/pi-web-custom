@@ -40,6 +40,7 @@ import { appStyles } from "./shared";
 type NavigationSection = "projects" | "workspaces" | "sessions";
 
 const PI_WEB_STATUS_REFRESH_MS = 15 * 60 * 1000;
+const GLOBAL_SHORTCUT_LISTENER_OPTIONS = { capture: true } as const;
 const THEME_AUTO_ON_VALUE = "auto:on";
 const THEME_AUTO_OFF_VALUE = "auto:off";
 const THEME_OPTION_PREFIX = "theme:";
@@ -150,7 +151,7 @@ export class PiWebApp extends LitElement {
     window.addEventListener("popstate", this.onPopState);
     window.addEventListener("focus", this.onFocus);
     document.addEventListener("visibilitychange", this.onVisibilityChange);
-    window.addEventListener("keydown", this.onKeyDown);
+    window.addEventListener("keydown", this.onKeyDown, GLOBAL_SHORTCUT_LISTENER_OPTIONS);
     this.mobileNavigationMedia?.addEventListener("change", this.onMobileNavigationMediaChange);
     this.systemLightThemeMedia?.addEventListener("change", this.onSystemLightThemeChange);
     this.applyPreferredTheme(false);
@@ -166,7 +167,7 @@ export class PiWebApp extends LitElement {
     window.removeEventListener("popstate", this.onPopState);
     window.removeEventListener("focus", this.onFocus);
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
-    window.removeEventListener("keydown", this.onKeyDown);
+    window.removeEventListener("keydown", this.onKeyDown, GLOBAL_SHORTCUT_LISTENER_OPTIONS);
     this.mobileNavigationMedia?.removeEventListener("change", this.onMobileNavigationMediaChange);
     this.systemLightThemeMedia?.removeEventListener("change", this.onSystemLightThemeChange);
     this.keyboard.reset();
