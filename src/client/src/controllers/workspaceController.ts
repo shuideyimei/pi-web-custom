@@ -16,7 +16,7 @@ export class WorkspaceController {
 
   clearSelection(options?: { updateUrl?: boolean | undefined }) {
     this.sessions.clearActiveSession();
-    this.setState({ selectedProject: undefined, selectedWorkspace: undefined, workspaces: [], ...resetWorkspaceScopedState() });
+    this.setState({ selectedProject: undefined, selectedWorkspace: undefined, workspaces: [], isLoadingWorkspaces: false, ...resetWorkspaceScopedState() });
     if (options?.updateUrl !== false) this.updateUrl();
   }
 
@@ -28,22 +28,22 @@ export class WorkspaceController {
 
   async selectProject(project: Project, target?: RouteTarget) {
     this.sessions.clearActiveSession();
-    this.setState({ selectedProject: project, selectedWorkspace: undefined, workspaces: [], ...resetWorkspaceScopedState() });
+    this.setState({ selectedProject: project, selectedWorkspace: undefined, workspaces: [], isLoadingWorkspaces: true, ...resetWorkspaceScopedState() });
     try {
       const workspaces = await api.workspaces(project.id);
-      this.setState({ workspaces, workspacesByProjectId: { ...this.getState().workspacesByProjectId, [project.id]: workspaces } });
+      this.setState({ workspaces, workspacesByProjectId: { ...this.getState().workspacesByProjectId, [project.id]: workspaces }, isLoadingWorkspaces: false });
       const workspace = selectPreferredWorkspace(workspaces, { targetWorkspaceId: target?.workspaceId, latestWorkspaceId: this.workspaceSelection.latestWorkspaceId(project.id) });
       if (workspace) await this.selectWorkspace(workspace, { sessionId: target?.sessionId, updateUrl: target?.updateUrl });
       else if (target?.updateUrl !== false) this.updateUrl();
     } catch (error) {
-      this.setState({ error: String(error) });
+      this.setState({ error: String(error), isLoadingWorkspaces: false });
     }
   }
 
   async selectWorkspace(workspace: Workspace, target?: { sessionId?: string | undefined; updateUrl?: boolean | undefined }) {
     this.workspaceSelection.rememberWorkspace(workspace);
     this.sessions.clearActiveSession();
-    this.setState({ selectedWorkspace: workspace, ...resetWorkspaceScopedState() });
+    this.setState({ selectedWorkspace: workspace, isLoadingWorkspaces: false, ...resetWorkspaceScopedState() });
     try {
       const sessions = mergeCachedNewSessions(workspace.path, await api.sessions(workspace.path));
       this.setState({ sessions });

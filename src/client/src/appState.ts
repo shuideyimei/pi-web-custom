@@ -11,6 +11,8 @@ export interface AppState {
   messagePageTotal: number;
   isLoadingEarlierMessages: boolean;
   isReceivingPartialStream: boolean;
+  isLoadingProjects: boolean;
+  isLoadingWorkspaces: boolean;
   selectedProject: Project | undefined;
   selectedWorkspace: Workspace | undefined;
   selectedSession: SessionInfo | undefined;
@@ -96,6 +98,8 @@ export function initialAppState(): AppState {
     messagePageTotal: 0,
     isLoadingEarlierMessages: false,
     isReceivingPartialStream: false,
+    isLoadingProjects: false,
+    isLoadingWorkspaces: false,
     selectedProject: undefined,
     selectedWorkspace: undefined,
     selectedSession: undefined,

@@ -130,6 +130,9 @@ export const workspacePanelStyles = css`
   button.selected { border-color: var(--pi-accent); background: var(--pi-selection-bg); }
   .tab-badge { display: inline-block; min-width: 14px; border: 1px solid var(--pi-success-border); border-radius: 999px; background: var(--pi-success-surface); color: var(--pi-success); padding: 0 5px; font-size: 11px; line-height: 16px; text-align: center; }
   .panel-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+  .empty-state { box-sizing: border-box; width: min(100%, 380px); margin: auto; padding: 24px; display: grid; gap: 8px; color: var(--pi-muted); text-align: center; }
+  .empty-state h2 { margin: 0; color: var(--pi-text); font-size: 15px; line-height: 1.3; }
+  .empty-state p { margin: 0; line-height: 1.45; }
   small, .muted { color: var(--pi-muted); }
   header small { flex: 0 0 auto; min-width: max-content; overflow: visible; text-overflow: clip; white-space: nowrap; }
   header .workspace-label { width: max-content; max-width: none; overflow: visible; }

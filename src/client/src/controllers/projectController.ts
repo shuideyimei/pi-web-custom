@@ -6,7 +6,7 @@ export class ProjectController {
   constructor(private readonly getState: GetState, private readonly setState: SetState, private readonly workspaces: WorkspaceController) {}
 
   async loadProjects() {
-    this.setState({ error: "" });
+    this.setState({ error: "", isLoadingProjects: true });
     try {
       const projects = await api.projects();
       const projectIds = new Set(projects.map((project) => project.id));
@@ -14,6 +14,8 @@ export class ProjectController {
       this.setState({ projects, workspacesByProjectId });
     } catch (error) {
       this.setState({ error: String(error) });
+    } finally {
+      this.setState({ isLoadingProjects: false });
     }
   }
 

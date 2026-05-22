@@ -5,10 +5,16 @@ import type { QualifiedContributionId, QualifiedWorkspacePanelContribution, Work
 import { workspacePanelStyles } from "./shared";
 import { renderWorkspaceLabel } from "./workspaceLabel";
 
+export interface WorkspacePanelEmptyState {
+  title: string;
+  body?: string;
+}
+
 @customElement("workspace-panel")
 export class WorkspacePanel extends LitElement {
   @property({ attribute: false }) workspace: Workspace | undefined;
   @property({ attribute: false }) panelContext: WorkspacePanelContext | undefined;
+  @property({ attribute: false }) emptyState: WorkspacePanelEmptyState | undefined;
   @property() tool: QualifiedContributionId = "core:workspace.files";
   @property({ attribute: false }) panels: QualifiedWorkspacePanelContribution[] = [];
   @property({ attribute: false }) workspaceLabelItems: WorkspaceLabelItem[] = [];
@@ -43,9 +49,15 @@ export class WorkspacePanel extends LitElement {
 
   override render() {
     const workspace = this.workspace;
-    if (workspace === undefined) return html`<section class="empty">Select a workspace.</section>`;
+    if (workspace === undefined) return this.renderEmptyState(this.emptyState ?? {
+      title: "Select a workspace",
+      body: "Choose a workspace to inspect files, Git, or terminals.",
+    });
     const context = this.panelContext;
-    if (context === undefined) return html`<section class="empty">Workspace panel unavailable.</section>`;
+    if (context === undefined) return this.renderEmptyState({
+      title: "Workspace tools unavailable",
+      body: "Try selecting the workspace again.",
+    });
     const visiblePanels = this.panels;
     const selectedPanel = visiblePanels.find((panel) => panel.id === this.tool) ?? visiblePanels[0];
     return html`
@@ -63,7 +75,10 @@ export class WorkspacePanel extends LitElement {
           </div>
         </div>
       </header>
-      ${selectedPanel === undefined ? html`<section class="empty">No workspace panels registered.</section>` : html`
+      ${selectedPanel === undefined ? this.renderEmptyState({
+        title: "No workspace tools available",
+        body: "No tools are available for this workspace.",
+      }) : html`
         <div class="panel-content">
           ${selectedPanel.render(context)}
         </div>
@@ -75,6 +90,15 @@ export class WorkspacePanel extends LitElement {
     const badge = panel.badge?.(context);
     if (badge === undefined || badge === "") return html`${panel.title}`;
     return html`${panel.title} <span class="tab-badge">${badge}</span>`;
+  }
+
+  private renderEmptyState(state: WorkspacePanelEmptyState): TemplateResult {
+    return html`
+      <section class="empty-state" role="status">
+        <h2>${state.title}</h2>
+        ${state.body === undefined ? null : html`<p>${state.body}</p>`}
+      </section>
+    `;
   }
 
   private workspaceHeaderFrameClass(): string {

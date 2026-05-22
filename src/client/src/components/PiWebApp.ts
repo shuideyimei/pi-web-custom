@@ -35,6 +35,7 @@ import "./ActionPalette";
 import "./AuthDialog";
 import "./ProjectDialog";
 import "./WorkspacePanel";
+import type { WorkspacePanelEmptyState } from "./WorkspacePanel";
 import { appStyles } from "./shared";
 
 type NavigationSection = "projects" | "workspaces" | "sessions";
@@ -418,7 +419,8 @@ export class PiWebApp extends LitElement {
     const workspace = this.state.selectedWorkspace;
     const panelContext = workspace === undefined ? undefined : this.createWorkspacePanelContext(workspace);
     const workspaceLabelItems = workspace === undefined ? [] : this.plugins.getWorkspaceLabelItems(this.state, workspace);
-    return html`<workspace-panel .workspace=${workspace} .panelContext=${panelContext} .tool=${this.state.workspaceTool} .panels=${this.visibleWorkspacePanels()} .workspaceLabelItems=${workspaceLabelItems} .onSelectTool=${(tool: QualifiedContributionId) => { this.openWorkspaceTool(tool); }}></workspace-panel>`;
+    const emptyState = workspace === undefined ? this.workspacePanelEmptyState() : undefined;
+    return html`<workspace-panel .workspace=${workspace} .panelContext=${panelContext} .emptyState=${emptyState} .tool=${this.state.workspaceTool} .panels=${this.visibleWorkspacePanels()} .workspaceLabelItems=${workspaceLabelItems} .onSelectTool=${(tool: QualifiedContributionId) => { this.openWorkspaceTool(tool); }}></workspace-panel>`;
   }
 
   private renderNavigationPanel(autoSwitchToChat: boolean) {
@@ -507,6 +509,51 @@ export class PiWebApp extends LitElement {
     const workspace = this.state.selectedWorkspace;
     if (workspace === undefined) return [];
     return this.plugins.getWorkspacePanels().filter((panel) => panel.visible?.({ workspace, state: this.state }) ?? true);
+  }
+
+  private workspacePanelEmptyState(): WorkspacePanelEmptyState {
+    const project = this.state.selectedProject;
+    if (this.state.isLoadingProjects) {
+      return {
+        title: "Loading projects…",
+        body: "Looking for projects you have added to Pi Web.",
+      };
+    }
+    if (project === undefined) {
+      return this.state.projects.length === 0
+        ? {
+            title: "No projects yet",
+            body: "Use Actions → Add Project to add a folder. Workspace tools will appear here after you choose a workspace.",
+          }
+        : {
+            title: "Select a project",
+            body: "Choose a project from the sidebar, then select a workspace to inspect files, Git, or terminals.",
+          };
+    }
+    if (this.state.isLoadingWorkspaces) {
+      return {
+        title: "Loading workspaces…",
+        body: `Preparing workspace tools for ${project.name}.`,
+      };
+    }
+    if (this.state.workspaces.length === 0) {
+      return {
+        title: "No workspaces found",
+        body: `${project.name} does not have any available workspaces. Try selecting the project again or re-adding it.`,
+      };
+    }
+    return {
+      title: "Select a workspace",
+      body: `Choose a workspace in ${project.name} to inspect files, Git, or terminals.`,
+    };
+  }
+
+  private sessionEmptyMessage(): string {
+    if (this.state.isLoadingProjects) return "Loading projects…";
+    if (this.state.selectedWorkspace !== undefined) return "Select or start a session.";
+    if (this.state.selectedProject !== undefined) return "Select a workspace to start a session.";
+    if (this.state.projects.length === 0) return "Add a project to start a session.";
+    return "Select a project and workspace to start a session.";
   }
 
   private renderMobilePanelTitle(panel: QualifiedWorkspacePanelContribution) {
@@ -847,7 +894,7 @@ export class PiWebApp extends LitElement {
             ${state.modelDialog !== undefined ? html`<command-picker title=${state.modelDialog.title} .searchable=${true} .options=${state.modelDialog.options} .selectedValue=${state.modelDialog.selectedValue} .onPick=${(value: string) => { void this.pickModel(value); }} .onCancel=${() => { this.setState({ modelDialog: undefined }); }}></command-picker>` : null}
             ${state.thinkingDialog !== undefined ? html`<command-picker title=${state.thinkingDialog.title} .options=${state.thinkingDialog.options} .selectedValue=${state.thinkingDialog.selectedValue} .onPick=${(value: string) => { void this.pickThinking(value); }} .onCancel=${() => { this.setState({ thinkingDialog: undefined }); }}></command-picker>` : null}
             ${state.authDialog !== undefined ? html`<auth-dialog .state=${state.authDialog} .onChooseMethod=${(authType: "oauth" | "api_key") => { void this.auth.chooseLoginMethod(authType); }} .onSelectProvider=${(providerId: string, authType: "oauth" | "api_key") => { void this.auth.selectLoginProvider(providerId, authType); }} .onApiKeyInput=${(value: string) => { this.auth.updateApiKey(value); }} .onSaveApiKey=${() => { void this.auth.saveApiKey(); }} .onLogoutProvider=${(providerId: string) => { void this.auth.logoutProvider(providerId); }} .onOAuthInput=${(value: string) => { this.auth.updateOAuthInput(value); }} .onOAuthRespond=${(value?: string) => { void this.auth.respondOAuth(value); }} .onOAuthCancel=${() => { void this.auth.cancelOAuth(); }} .onCancel=${() => { this.auth.closeDialog(); }}></auth-dialog>` : null}
-          ` : html`<div class="empty">Select or start a session.</div>`}
+          ` : html`<div class="empty">${this.sessionEmptyMessage()}</div>`}
         </main>
         ${this.renderWorkspacePanel()}
         ${state.actionPaletteOpen ? html`<action-palette .actions=${this.getActions()} .onRun=${(action: AppAction) => { this.setState({ actionPaletteOpen: false }); this.runAction(action); }} .onCancel=${() => { this.setState({ actionPaletteOpen: false }); }}></action-palette>` : null}
