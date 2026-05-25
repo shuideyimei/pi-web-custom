@@ -124,6 +124,7 @@ body::after {
   .home-page .title-context,
   .home-page .hero .eyebrow,
   .home-page .hero-lede,
+  .home-page .hero-manifesto,
   .home-page .hero-actions,
   .home-page .hero-stats,
   .home-page .terminal,
@@ -393,7 +394,8 @@ h1 {
 .callout,
 .toc,
 .code-card,
-.demo-frame {
+.demo-frame,
+.manifesto-panel {
   border: 1px solid var(--line);
   background: var(--panel);
 }
@@ -538,7 +540,8 @@ code .comment,
 .faq-item,
 .callout,
 .toc,
-.code-card {
+.code-card,
+.manifesto-panel {
   border-radius: var(--radius);
 }
 
@@ -598,6 +601,58 @@ code .comment,
   border-bottom: 1px solid var(--line);
   background: #0c1020;
   color: var(--muted);
+}
+
+.manifesto-section {
+  padding-top: 46px;
+}
+
+.manifesto-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.58fr);
+  gap: 32px;
+  overflow: hidden;
+  padding: clamp(26px, 4vw, 38px);
+  border-left: 4px solid var(--brand-2);
+  background: var(--panel);
+}
+
+.manifesto-copy {
+  max-width: 760px;
+}
+
+.manifesto-copy h2 {
+  font-size: clamp(2.2rem, 4.6vw, 4rem);
+  line-height: 0.98;
+}
+
+.manifesto-copy p {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 1.06rem;
+  line-height: 1.75;
+}
+
+.manifesto-lines {
+  display: grid;
+  align-content: end;
+  gap: 14px;
+}
+
+.manifesto-lines p {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.manifesto-callout {
+  color: var(--text);
+  font-size: 1.08rem;
+  line-height: 1.65;
 }
 
 .install-panel {
@@ -987,7 +1042,8 @@ html[data-theme="light"] .comment {
 @media (max-width: 920px) {
   .hero-grid,
   .install-panel,
-  .doc-layout {
+  .doc-layout,
+  .manifesto-panel {
     grid-template-columns: 1fr;
   }
 
@@ -999,6 +1055,10 @@ html[data-theme="light"] .comment {
   .hero-stats,
   .doc-grid {
     grid-template-columns: 1fr;
+  }
+
+  .manifesto-lines {
+    align-content: start;
   }
 }
 

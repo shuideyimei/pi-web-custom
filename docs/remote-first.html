@@ -6,7 +6,7 @@
     <title>Remote-first development with PI WEB</title>
     <meta
       name="description"
-      content="Why PI WEB is built for remote AI-driven development with persistent agents and browser-based control."
+      content="Why PI WEB makes AI coding work persistent by default: agents keep running outside your device while the browser becomes the control plane."
     />
     <meta property="og:title" content="Remote-first development with PI WEB" />
     <meta property="og:image" content="assets/pi-web-banner.png" />
@@ -57,8 +57,8 @@
           <p class="eyebrow"><span class="pulse"></span> Remote-first development</p>
           <h1>Your laptop is a window, not the workstation.</h1>
           <p>
-            PI WEB is built around a simple shift: development should live where the work happens, not where your
-            current keyboard happens to be.
+            PI WEB is built around a simple shift: AI-driven development should live where the work can persist, not
+            where your current keyboard happens to be. You supervise the work; you do not have to host it.
           </p>
         </div>
       </section>
@@ -67,7 +67,8 @@
         <div class="container doc-layout">
           <aside class="toc" aria-label="Remote-first page contents">
             <strong>On this page</strong>
-            <a href="#why-local-blocks">Why local can block</a>
+            <a href="#why-local-blocks">The old assumption</a>
+            <a href="#persistence-first">Persistence first-class</a>
             <a href="#what-remote-unlocks">What remote unlocks</a>
             <a href="#browser-control">Browser as control plane</a>
             <a href="#human-role">The human role</a>
@@ -76,16 +77,34 @@
 
           <div class="doc-content">
             <section id="why-local-blocks">
-              <h2>Local-only development can become the blocker</h2>
+              <h2>Developer tools assumed the work lived locally</h2>
               <p>
-                Local development made sense when one human drove every keystroke from one machine. With AI agents, the
-                work can outlive the laptop session. Agents need stable repositories, shells, tools, secrets, build
-                caches, and time to keep running.
+                Editors and terminals were built around a simple assumption: the work lives with you, on your device,
+                inside your session. That made sense when one human drove every keystroke from one machine.
+              </p>
+              <p>
+                AI agents break that assumption. The work can outlive the laptop session, and agents need stable
+                repositories, shells, tools, secrets, build caches, and time to keep running.
               </p>
               <p>
                 When all of that is tied to a laptop, the laptop becomes the bottleneck: close the lid, change devices,
                 lose network, reboot, or run out of battery, and the work environment is interrupted.
               </p>
+            </section>
+
+            <section id="persistence-first">
+              <h2>Persistence should not be a workaround</h2>
+              <p>
+                Terminals are ephemeral by default. You can patch around that with tmux, screen, background processes,
+                and remote shells, but persistence is still something you bolt on after the fact.
+              </p>
+              <p>
+                PI WEB treats persistence as the foundation. Agent sessions live in a long-running runtime, workspaces
+                stay on the machine that runs the tools, and browser disconnects do not end the work.
+              </p>
+              <div class="callout manifesto-callout">
+                If AI is doing the work, the work should not be tied to your laptop.
+              </div>
             </section>
 
             <section id="what-remote-unlocks">
@@ -121,7 +140,8 @@
                 while the development environment stays remote and stable.
               </p>
               <p>
-                Laptop, phone, tablet, desktop: they are just windows into the same running work.
+                Laptop, phone, tablet, desktop: they are just windows into the same running work. You remain in control,
+                but you are no longer the machine carrying the work.
               </p>
             </section>
 
@@ -131,6 +151,9 @@
                 Remote-first does not remove the human. It moves the human away from carrying the whole development
                 environment and toward higher-leverage work: choosing direction, setting constraints, reviewing changes,
                 and deciding what ships.
+              </p>
+              <p>
+                You do not carry the work. You guide it.
               </p>
             </section>
 
