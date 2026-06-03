@@ -1,8 +1,9 @@
-import { LitElement, css, html, svg } from "lit";
+import { LitElement, css, html, svg, type TemplateResult } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import type { AppState } from "../../appState";
 
-export type AppMobileMainTabIcon = "navigation" | "chat" | "files" | "git" | "terminal";
+export type AppMobileMainTabBuiltinIcon = "navigation" | "chat" | "files" | "git" | "terminal";
+export type AppMobileMainTabIcon = AppMobileMainTabBuiltinIcon | TemplateResult;
 
 export interface AppMobileMainTab {
   id: AppState["mainView"];
@@ -115,6 +116,7 @@ export class AppMobileMainTabs extends LitElement {
   }
 
   private renderIcon(icon: AppMobileMainTabIcon) {
+    if (typeof icon !== "string") return html`<span class="tab-custom-icon" aria-hidden="true">${icon}</span>`;
     switch (icon) {
       case "navigation":
         return svg`
@@ -206,6 +208,8 @@ export class AppMobileMainTabs extends LitElement {
     .mobile-tabs .navigation-tab { display: none; }
     .mobile-tabs button.selected { border-color: var(--pi-accent); background: var(--pi-selection-bg); }
     .tab-icon { flex: 0 0 auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+    .tab-custom-icon { flex: 0 0 auto; width: 18px; height: 18px; display: inline-grid; place-items: center; color: currentColor; pointer-events: none; }
+    .tab-custom-icon svg { width: 18px; height: 18px; pointer-events: none; }
     .tab-fallback { display: none; font-weight: 650; letter-spacing: .01em; pointer-events: none; }
     .tab-label { min-width: 0; }
     .tab-badge { flex: 0 0 auto; display: inline-block; min-width: 14px; margin-left: 0; border: 1px solid var(--pi-success-border); border-radius: 999px; background: var(--pi-success-surface); color: var(--pi-success); padding: 0 5px; font-size: 11px; line-height: 16px; text-align: center; }

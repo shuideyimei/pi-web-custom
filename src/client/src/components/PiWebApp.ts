@@ -1021,7 +1021,7 @@ export class PiWebApp extends LitElement {
       { id: "navigation", label: "Sessions", icon: "navigation", className: "navigation-tab" },
       { id: "chat", label: "Chat", icon: "chat" },
       ...this.visibleWorkspacePanels().map((panel): AppMobileMainTab => {
-        const icon = this.mobilePanelIcon(panel);
+        const icon = panel.icon ?? this.mobilePanelIcon(panel);
         return {
           id: panel.id,
           label: panel.title,

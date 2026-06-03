@@ -51,6 +51,31 @@ describe("PluginRegistry", () => {
     expect(registry.getWorkspacePanels().map((panel) => panel.id)).toEqual(["core:workspace.files", "core:workspace.git", "core:workspace.terminal"]);
   });
 
+  it("provides html and svg helpers to plugin activation", () => {
+    const registry = new PluginRegistry();
+    registry.register({
+      id: "example",
+      plugin: {
+        apiVersion: 1,
+        name: "Example",
+        activate: ({ html, svg }) => ({
+          contributions: {
+            workspacePanels: [
+              {
+                id: "workspace.logs",
+                title: "Logs",
+                icon: svg`<svg viewBox="0 0 24 24"><path d="M4 6h16"></path></svg>`,
+                render: () => html`<p>Logs</p>`,
+              },
+            ],
+          },
+        }),
+      },
+    });
+
+    expect(registry.getWorkspacePanels()[0]?.icon).toBeDefined();
+  });
+
   it("rejects duplicate ids within the same namespace", () => {
     const registry = new PluginRegistry();
 

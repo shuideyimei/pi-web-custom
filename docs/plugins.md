@@ -100,11 +100,11 @@ Module shape excerpt:
 export default {
   apiVersion: 1,
   name: "Info Plugin",
-  activate: ({ html }) => ({
+  activate: ({ html, svg }) => ({
     contributions: {
       actions: [/* action definitions */],
       workspaceLabels: [/* compact label definitions */],
-      workspacePanels: [/* panel definitions using html */],
+      workspacePanels: [/* panel definitions using html, optional icons using svg */],
     },
   }),
 };
@@ -239,6 +239,7 @@ interface PluginActivationContext {
   apiVersion: 1;
   pluginId: string;
   html: typeof import("lit").html;
+  svg: typeof import("lit").svg;
 }
 
 interface PluginActivationResult {
@@ -369,6 +370,13 @@ workspacePanels: [
   {
     id: "workspace.info",
     title: "Info",
+    icon: svg`
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M12 10v6"></path>
+        <path d="M12 7h.01"></path>
+      </svg>
+    `,
     order: 100,
     visible: ({ workspace }) => workspace.isGitRepo,
     render: ({ workspace }) => html`
@@ -388,6 +396,7 @@ Panel type:
 interface WorkspacePanelContribution {
   id: string;
   title: string;
+  icon?: TemplateResult;
   order?: number;
   visible?: (context: { workspace: Workspace }) => boolean;
   badge?: (context: WorkspacePanelContext) => string | number | TemplateResult | undefined;
@@ -399,6 +408,8 @@ interface WorkspacePanelContext {
   openTerminal: (options?: { terminalId?: string }) => void;
 }
 ```
+
+`icon` is optional and is used in the compact mobile tab bar. Prefer an SVG rendered with the `svg` helper from `PluginActivationContext`; use `currentColor` so PI WEB themes can style it. If `icon` is omitted, mobile tabs fall back to initials from the panel title, or to the full title when initials collide.
 
 `workspace` and `openTerminal()` are documented as stable for panel callbacks. Other fields may exist at runtime, but they are PI WEB internals and can change quickly. If a panel needs file, git, terminal, or session data beyond the helpers documented here, prefer explicit `fetch()` calls and keep them isolated.
 

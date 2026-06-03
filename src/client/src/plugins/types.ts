@@ -7,6 +7,7 @@ import type { LocalContributionId, PluginId, QualifiedContributionId } from "./i
 
 export type { LocalContributionId, PluginId, QualifiedContributionId } from "./ids";
 export type HtmlTemplateTag = (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult;
+export type SvgTemplateTag = (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult;
 
 export interface PiWebPluginRegistration {
   id: PluginId;
@@ -23,6 +24,7 @@ export interface PluginActivationContext {
   apiVersion: 1;
   pluginId: PluginId;
   html: HtmlTemplateTag;
+  svg: SvgTemplateTag;
 }
 
 export interface PluginActivationResult {
@@ -118,9 +120,12 @@ export interface WorkspacePanelContext {
   onSelectTerminal: (terminalId: string | undefined, options?: { replace?: boolean | undefined }) => void;
 }
 
+export type WorkspacePanelIcon = TemplateResult;
+
 export interface WorkspacePanelContribution {
   id: LocalContributionId;
   title: string;
+  icon?: WorkspacePanelIcon;
   order?: number;
   visible?: (context: WorkspacePanelVisibilityContext) => boolean;
   badge?: (context: WorkspacePanelContext) => string | number | TemplateResult | undefined;
