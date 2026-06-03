@@ -1,4 +1,4 @@
-import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitDiffResponse, GitFileState, GitStatusFile, GitStatusResponse, MessagePage, ModelSelectionResponse, OAuthFlowState, PiWebComponentStatus, PiWebInstallationInfo, PiWebReleaseStatus, PiWebServiceComponent, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevel, ThinkingLevelsResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
+import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitDiffResponse, GitFileState, GitStatusFile, GitStatusResponse, MessagePage, ModelSelectionResponse, OAuthFlowState, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebReleaseStatus, PiWebServiceComponent, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevel, ThinkingLevelsResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -355,6 +355,38 @@ export function parseWorkspaceActivity(value: unknown): WorkspaceActivity {
 export function parseWorkspaceActivityResponse(value: unknown): WorkspaceActivityResponse {
   const record = requireRecord(value);
   return { workspaces: arrayOf(parseWorkspaceActivity)(record["workspaces"]), generatedAt: requireString(record, "generatedAt") };
+}
+
+export function parsePiWebConfigResponse(value: unknown): PiWebConfigResponse {
+  const record = requireRecord(value);
+  return {
+    path: requireString(record, "path"),
+    exists: requireBoolean(record, "exists"),
+    config: parsePiWebConfigValues(record["config"]),
+    effectiveConfig: parsePiWebConfigValues(record["effectiveConfig"]),
+    envOverrides: parsePiWebConfigEnvOverrides(record["envOverrides"]),
+  };
+}
+
+function parsePiWebConfigValues(value: unknown): PiWebConfigValues {
+  const record = requireRecord(value);
+  return {
+    ...optionalField("host", optionalString(record, "host")),
+    ...optionalField("port", optionalNumber(record, "port")),
+    ...optionalField("allowedHosts", optionalAllowedHosts(record["allowedHosts"])),
+  };
+}
+
+function optionalAllowedHosts(value: unknown): PiWebConfigValues["allowedHosts"] | undefined {
+  if (value === undefined) return undefined;
+  if (value === true) return true;
+  if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
+  throw new Error("Invalid PI WEB allowedHosts field");
+}
+
+function parsePiWebConfigEnvOverrides(value: unknown): PiWebConfigEnvOverrides {
+  const record = requireRecord(value);
+  return { host: requireBoolean(record, "host"), port: requireBoolean(record, "port"), allowedHosts: requireBoolean(record, "allowedHosts") };
 }
 
 export function parsePiWebStatusResponse(value: unknown): PiWebStatusResponse {

@@ -1,4 +1,4 @@
-import type { FileSuggestion, RunTerminalCommandInput, TerminalCommandRun, TerminalCommandRunFilter } from "../../../shared/apiTypes";
+import type { FileSuggestion, PiWebConfigValues, RunTerminalCommandInput, TerminalCommandRun, TerminalCommandRunFilter } from "../../../shared/apiTypes";
 import { request } from "./http";
 import {
   arrayOf,
@@ -17,6 +17,7 @@ import {
   parseMessagePage,
   parseModelSelectionResponse,
   parseOAuthFlowState,
+  parsePiWebConfigResponse,
   parsePiWebStatusResponse,
   parseProject,
   parseRestored,
@@ -34,6 +35,11 @@ import { gitDiffUrl, messageUrl } from "./urls";
 
 export const piWebApi = {
   piWebStatus: () => request("/api/pi-web/status", parsePiWebStatusResponse),
+};
+
+export const configApi = {
+  config: () => request("/api/config", parsePiWebConfigResponse),
+  saveConfig: (config: PiWebConfigValues) => request("/api/config", parsePiWebConfigResponse, { method: "PUT", body: JSON.stringify({ config }) }),
 };
 
 export const activityApi = {
@@ -156,6 +162,7 @@ export const gitApi = {
 
 export const api = {
   ...piWebApi,
+  ...configApi,
   ...activityApi,
   ...projectsApi,
   ...workspacesApi,

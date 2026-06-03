@@ -1,12 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import type { PiWebConfigValues } from "./shared/apiTypes.js";
 
-export interface PiWebConfig {
-  host?: string;
-  port?: number;
-  allowedHosts?: string[] | true;
-}
+export type PiWebConfig = PiWebConfigValues;
 
 export interface LoadedPiWebConfig {
   path: string;
@@ -14,7 +11,7 @@ export interface LoadedPiWebConfig {
   config: PiWebConfig;
 }
 
-interface LoadOptions {
+export interface LoadOptions {
   env?: NodeJS.ProcessEnv;
   cwd?: string;
 }
@@ -66,6 +63,35 @@ export function effectivePiWebConfig(options: LoadOptions = {}): LoadedPiWebConf
       ...(port !== undefined && port !== "" ? { port: parsePort(port, "PI_WEB_PORT") } : {}),
       ...(allowedHosts !== undefined && allowedHosts !== "" ? { allowedHosts: parseAllowedHostsEnv(allowedHosts) } : {}),
     },
+  };
+}
+
+export function savePiWebConfig(config: PiWebConfig, options: LoadOptions = {}): LoadedPiWebConfig {
+  const env = options.env ?? process.env;
+  const path = piWebConfigPath(env, options.cwd ?? process.cwd());
+  const normalized = parsePiWebConfig(piWebConfigRecord(config), path);
+  const existing = readExistingConfigObject(path);
+  delete existing["host"];
+  delete existing["port"];
+  delete existing["allowedHosts"];
+  const merged = { ...existing, ...piWebConfigRecord(normalized) };
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+  return { path, exists: true, config: normalized };
+}
+
+function readExistingConfigObject(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {};
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!isRecord(parsed)) throw new Error(`PI WEB config must be a JSON object: ${path}`);
+  return parsed;
+}
+
+function piWebConfigRecord(config: PiWebConfig): Record<string, unknown> {
+  return {
+    ...(config.host !== undefined ? { host: config.host } : {}),
+    ...(config.port !== undefined ? { port: config.port } : {}),
+    ...(config.allowedHosts !== undefined ? { allowedHosts: config.allowedHosts } : {}),
   };
 }
 

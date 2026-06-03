@@ -25,6 +25,7 @@ import { AppShellController } from "../appShell/appShellController";
 import { MobileNavigationController, type NavigationSection } from "../appShell/navigationState";
 import { PanelCollapseController, mainViewClass } from "../appShell/panelCollapseController";
 import { readRoute, writeRoute, type AppRoute } from "../route";
+import { readSettingsSection, writeSettingsSection, type SettingsSection } from "../settingsRoute";
 import { createTerminalCommandRunsRuntime } from "../runtime/terminalRuntime";
 import { isWorkspaceDeletionPending, isWorkspaceDeletionRunPending, latestWorkspaceDeletionRuns, pendingWorkspaceDeletionIds, targetWorkspaceIdForRun, workspaceDeletionMetadata, workspaceDeletionRunFilter } from "../workspaceDeletion";
 import "./ProjectList";
@@ -39,6 +40,7 @@ import "./CommandPicker";
 import "./ActionPalette";
 import "./AuthDialog";
 import "./ProjectDialog";
+import "./SettingsDialog";
 import "./WorkspacePanel";
 import type { WorkspacePanelEmptyState } from "./WorkspacePanel";
 import "./appShell/AppContextBar";
@@ -121,7 +123,11 @@ export class PiWebApp extends LitElement {
   private themePreference: ThemePreference = readStoredThemePreference() ?? DEFAULT_THEME_PREFERENCE;
   @state() private activeThemeId: QualifiedContributionId = CLASSIC_THEME_ID;
   @state() private isRefreshingApp = false;
-  private readonly onPopState = () => void this.withChatScrollTransition(() => this.restoreRoute(false));
+  @state() private settingsSection: SettingsSection | undefined = readSettingsSection();
+  private readonly onPopState = () => void this.withChatScrollTransition(async () => {
+    this.restoreSettingsRoute();
+    await this.restoreRoute(false);
+  });
   private readonly onPageShow = () => {
     this.appShell.repairViewportPosition();
   };
@@ -200,6 +206,7 @@ export class PiWebApp extends LitElement {
   }
 
   private async loadProjectsAndRestoreRoute() {
+    this.restoreSettingsRoute();
     await this.projects.loadProjects();
     await this.withChatScrollTransition(() => this.restoreRoute(false));
     await this.refreshWorkspaceDeletionRuns();
@@ -379,6 +386,25 @@ export class PiWebApp extends LitElement {
     this.setState({ mainView: view });
     this.updateUrl();
     this.git.updatePolling();
+  }
+
+  private openSettings(section: SettingsSection = "general"): void {
+    this.settingsSection = section;
+    writeSettingsSection(section);
+  }
+
+  private closeSettings(): void {
+    this.settingsSection = undefined;
+    writeSettingsSection(undefined);
+  }
+
+  private navigateSettings(section: SettingsSection): void {
+    this.settingsSection = section;
+    writeSettingsSection(section);
+  }
+
+  private restoreSettingsRoute(): void {
+    this.settingsSection = readSettingsSection();
   }
 
   private handleWorkspaceChange(previous: AppState, next: AppState) {
@@ -676,6 +702,7 @@ export class PiWebApp extends LitElement {
       configureAuth: () => this.auth.openLogin(),
       logoutAuth: () => this.auth.openLogout(),
       openThemePicker: () => { this.openThemeDialog(); },
+      openSettings: (section) => { this.openSettings(section); },
       selectMainView: (view) => { this.selectMainView(view); },
       selectWorkspaceTool: (tool) => { this.openWorkspaceTool(tool); },
       openTerminal: (options) => { this.openTerminal(options); },
@@ -949,6 +976,7 @@ export class PiWebApp extends LitElement {
         .session=${this.state.selectedSession}
         .refreshControl=${this.appShell.shouldShowAppRefreshInContextBar() ? this.renderAppRefresh() : undefined}
         .onOpenSection=${(section: NavigationSection) => { this.openNavigationSection(section); }}
+        .onShowActions=${() => { this.setState({ actionPaletteOpen: true }); }}
       ></app-context-bar>
     `;
   }
@@ -1001,6 +1029,7 @@ export class PiWebApp extends LitElement {
         ${state.actionPaletteOpen ? html`<action-palette .actions=${this.getActions()} .onRun=${(action: AppAction) => { this.setState({ actionPaletteOpen: false }); this.runAction(action); }} .onCancel=${() => { this.setState({ actionPaletteOpen: false }); }}></action-palette>` : null}
         ${state.projectDialogOpen ? html`<project-dialog .onSubmit=${(path: string, create: boolean) => this.projects.addProject(path, create)} .onCancel=${() => { this.setState({ projectDialogOpen: false }); }}></project-dialog>` : null}
         ${state.themeDialog !== undefined ? html`<command-picker title=${state.themeDialog.title} .options=${state.themeDialog.options} .selectedValue=${state.themeDialog.selectedValue} .onPick=${(value: string) => { this.pickTheme(value); }} .onCancel=${() => { this.setState({ themeDialog: undefined }); }}></command-picker>` : null}
+        ${this.settingsSection !== undefined ? html`<settings-dialog .section=${this.settingsSection} .actions=${this.getActions()} .onNavigate=${(section: SettingsSection) => { this.navigateSettings(section); }} .onClose=${() => { this.closeSettings(); }}></settings-dialog>` : null}
       </div>
     `;
   }

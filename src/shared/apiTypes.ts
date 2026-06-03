@@ -1,3 +1,23 @@
+export interface PiWebConfigValues {
+  host?: string;
+  port?: number;
+  allowedHosts?: string[] | true;
+}
+
+export interface PiWebConfigEnvOverrides {
+  host: boolean;
+  port: boolean;
+  allowedHosts: boolean;
+}
+
+export interface PiWebConfigResponse {
+  path: string;
+  exists: boolean;
+  config: PiWebConfigValues;
+  effectiveConfig: PiWebConfigValues;
+  envOverrides: PiWebConfigEnvOverrides;
+}
+
 export interface Project {
   id: string;
   name: string;

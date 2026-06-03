@@ -25,6 +25,7 @@ function createContext(statePatch: Partial<AppState> = {}) {
     configureAuth: vi.fn(() => { calls.push("configureAuth"); }),
     logoutAuth: vi.fn(() => { calls.push("logoutAuth"); }),
     openThemePicker: vi.fn(() => { calls.push("openThemePicker"); }),
+    openSettings: vi.fn(() => { calls.push("openSettings"); }),
     selectMainView: vi.fn((view: AppState["mainView"]) => { calls.push(`selectMainView:${view}`); }),
     selectWorkspaceTool: vi.fn((tool: AppState["workspaceTool"]) => { calls.push(`selectWorkspaceTool:${tool}`); }),
     openTerminal: vi.fn((options?: { terminalId?: string | undefined }) => { calls.push(`openTerminal:${options?.terminalId ?? ""}`); }),
@@ -175,6 +176,7 @@ describe("PluginRegistry", () => {
 
     expect(shortcuts).toEqual([
       ["core:actions.show", "mod+k"],
+      ["core:settings.open", "mod+,"],
       ["core:view.chat", "mod+1"],
       ["core:view.files", "mod+2"],
       ["core:view.git", "mod+3"],

@@ -13,6 +13,7 @@ import { registerSessionProxyRoutes } from "./sessiond/sessionProxyRoutes.js";
 import { registerWorkspaceExplorerRoutes } from "./workspaceExplorerRoutes.js";
 import { registerGitRoutes } from "./gitRoutes.js";
 import { registerTerminalProxyRoutes } from "./terminalProxyRoutes.js";
+import { registerConfigRoutes, type PiWebConfigService } from "./configRoutes.js";
 import { PiWebPluginService } from "./piWebPluginService.js";
 import { getPiWebStatus, getPiWebVersionStatus } from "./piWebStatus.js";
 
@@ -20,6 +21,7 @@ export interface AppDependencies {
   projects?: ProjectService;
   workspaces?: WorkspaceService;
   piWebPlugins?: Pick<PiWebPluginService, "manifest" | "readAsset">;
+  config?: PiWebConfigService;
   clientDist?: string | false;
   logger?: FastifyServerOptions["logger"];
 }
@@ -42,6 +44,7 @@ export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInsta
 
   app.get("/api/pi-web/status", async () => getPiWebStatus());
   app.get("/api/pi-web/version", async () => getPiWebVersionStatus());
+  registerConfigRoutes(app, deps.config);
 
   app.get("/api/projects", async () => projects.list());
 

@@ -2,6 +2,7 @@ import type { TemplateResult } from "lit";
 import type { AppAction } from "../actions";
 import type { FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, RunTerminalCommandInput, TerminalCommandRun, TerminalCommandRunFilter, TerminalCommandRunHandle, Workspace } from "../api";
 import type { AppState } from "../appState";
+import type { SettingsSection } from "../settingsRoute";
 import type { LocalContributionId, PluginId, QualifiedContributionId } from "./ids";
 
 export type { LocalContributionId, PluginId, QualifiedContributionId } from "./ids";
@@ -56,6 +57,7 @@ export interface PluginRuntimeContext {
   configureAuth: () => void | Promise<void>;
   logoutAuth: () => void | Promise<void>;
   openThemePicker: () => void;
+  openSettings: (section?: SettingsSection) => void;
   selectMainView: (view: AppState["mainView"]) => void;
   selectWorkspaceTool: (tool: QualifiedContributionId) => void;
   openTerminal: (options?: { terminalId?: string | undefined }) => void;
