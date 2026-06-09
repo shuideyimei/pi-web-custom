@@ -492,12 +492,19 @@ function parsePiWebPluginInfo(value: unknown): PiWebPluginInfo {
     module: requireString(record, "module"),
     source: requireString(record, "source"),
     scope: parsePiWebPluginScope(record["scope"]),
+    machineSpecific: parseOptionalBoolean(record["machineSpecific"], "machineSpecific") ?? false,
     enabled: requireBoolean(record, "enabled"),
   };
 }
 
 function parsePiWebPluginScope(value: unknown): PiWebPluginScope {
   if (value !== "bundled" && value !== "local" && value !== "user" && value !== "project") throw new Error("Invalid PI WEB plugin scope");
+  return value;
+}
+
+function parseOptionalBoolean(value: unknown, key: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new Error(`Expected optional boolean field: ${key}`);
   return value;
 }
 

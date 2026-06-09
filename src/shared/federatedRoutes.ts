@@ -6,6 +6,7 @@ export interface FederatedHttpRouteSpec {
 }
 
 export const FEDERATED_HTTP_ROUTES = [
+  { method: "GET", path: "/pi-web/status" },
   { method: "GET", path: "/projects" },
   { method: "POST", path: "/projects" },
   { method: "DELETE", path: "/projects/:projectId" },

@@ -266,10 +266,13 @@ export class PiWebApp extends LitElement {
   }
 
   private async refreshPiWebStatus(): Promise<void> {
+    const machineId = selectedMachineId(this.state);
     try {
-      this.setState({ piWebStatus: await piWebApi.piWebStatus() });
+      const piWebStatus = await piWebApi.piWebStatus(machineId);
+      if (selectedMachineId(this.state) === machineId) this.setState({ piWebStatus });
     } catch (error) {
-      console.warn("Failed to refresh PI WEB status", error);
+      if (selectedMachineId(this.state) === machineId) this.setState({ piWebStatus: undefined });
+      console.warn(`Failed to refresh PI WEB status for ${machineId}`, error);
     }
   }
 
@@ -723,7 +726,9 @@ export class PiWebApp extends LitElement {
     this.realtime.close();
     this.connectRealtime();
     this.activeTerminalIds.clear();
+    this.setState({ piWebStatus: undefined });
     this.git.updatePolling();
+    void this.refreshPiWebStatus();
     void this.loadPluginsForSelectedMachine();
   }
 
@@ -1186,7 +1191,10 @@ export class PiWebApp extends LitElement {
     const existing = this.machinePluginLoadPromises.get(machine.id);
     if (existing !== undefined) return existing;
 
-    const load = this.registerExternalPlugins(`PI WEB plugins from ${machine.name}`, () => loadExternalPlugins(`/api/machines/${encodeURIComponent(machine.id)}/pi-web-plugins/manifest.json`, { machineId: machine.id }))
+    const load = this.registerExternalPlugins(`PI WEB plugins from ${machine.name}`, () => loadExternalPlugins(`/api/machines/${encodeURIComponent(machine.id)}/pi-web-plugins/manifest.json`, {
+      machineId: machine.id,
+      shouldLoadPlugin: (entry) => this.plugins.shouldLoadRemotePlugin(entry.id, entry.machineSpecific),
+    }))
       .then((loaded) => { if (loaded) this.loadedMachinePluginIds.add(machine.id); })
       .finally(() => { this.machinePluginLoadPromises.delete(machine.id); });
     this.machinePluginLoadPromises.set(machine.id, load);

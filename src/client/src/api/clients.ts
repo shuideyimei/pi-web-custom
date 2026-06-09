@@ -43,7 +43,7 @@ import { machineGitDiffUrl, messageUrl } from "./urls";
 const machinePrefix = (machineId = "local") => `/api/machines/${encodeURIComponent(machineId)}`;
 
 export const piWebApi = {
-  piWebStatus: () => request("/api/pi-web/status", parsePiWebStatusResponse),
+  piWebStatus: (machineId = "local") => request(machineId === "local" ? "/api/pi-web/status" : `${machinePrefix(machineId)}/pi-web/status`, parsePiWebStatusResponse),
   piWebRuntime: () => request("/api/pi-web/runtime", parsePiWebRuntimeResponse),
 };
 

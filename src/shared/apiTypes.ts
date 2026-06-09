@@ -64,6 +64,7 @@ export interface PiWebPluginInfo {
   module: string;
   source: string;
   scope: PiWebPluginScope;
+  machineSpecific: boolean;
   enabled: boolean;
 }
 

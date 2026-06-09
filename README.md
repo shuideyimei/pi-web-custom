@@ -112,7 +112,7 @@ Remote model-provider credentials and OAuth state stay on the target machine. AP
 
 PI WEB production installs can load trusted local UI plugins without rebuilding PI WEB. Plugins are browser-side ES modules that can add action-palette actions, workspace panels, and workspace-label metadata, using documented context helpers for workspace files and terminals. They do not run in the session daemon and are not sandboxed.
 
-The supported package shape is intentionally singular: `piWeb.plugins` entries with explicit `id` and `module`, plus a browser module that exports `{ apiVersion: 1, name, activate }`. The bundled `pi-web-plugins/info` TypeScript source is the canonical minimal real example, `pi-web-plugins/updates` demonstrates a dynamic status panel, and built-in [Workspace Tasks](docs/plugins.md#workspace-tasks) adds a workspace tab for running configured shell commands in PI WEB terminals.
+The supported package shape is intentionally singular: `piWeb.plugins` entries with explicit `id` and `module` plus optional `machineSpecific` metadata, and a browser module that exports `{ apiVersion: 1, name, activate }`. The bundled `pi-web-plugins/info` TypeScript source is the canonical minimal real example, `pi-web-plugins/updates` demonstrates a dynamic status panel, and built-in [Workspace Tasks](docs/plugins.md#workspace-tasks) adds a workspace tab for running configured shell commands in PI WEB terminals.
 
 A useful prompt for AI agents:
 
