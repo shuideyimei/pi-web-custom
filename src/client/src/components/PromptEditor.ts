@@ -35,7 +35,7 @@ export class PromptEditor extends LitElement {
   @property({ type: Boolean }) isCompacting = false;
   @property({ type: Boolean }) canStop = false;
   @property({ attribute: false }) status?: SessionStatus;
-  @property({ attribute: false }) onSend?: (text: string, streamingBehavior?: "steer" | "followUp", attachments?: PromptAttachment[]) => void;
+  @property({ attribute: false }) onSend?: (text: string, streamingBehavior?: "steer" | "followUp", attachments?: PromptAttachment[]) => void | Promise<void>;
   @property({ attribute: false }) onSaveAttachments?: (attachments: PromptAttachment[]) => Promise<{ path: string }[]>;
   @property({ attribute: false }) onStop?: () => void;
   @property({ attribute: false }) onSelectModel?: () => void;
@@ -49,6 +49,7 @@ export class PromptEditor extends LitElement {
   @state() private attachmentDelivery: PromptAttachmentDelivery = loadAttachmentDelivery();
   @state() private attachmentError: string | undefined = undefined;
   @state() private isSavingAttachments = false;
+  @state() private isSending = false;
   private attachmentSeq = 0;
   private requestVersion = 0;
   private editor: EditorView | undefined;
@@ -86,13 +87,16 @@ export class PromptEditor extends LitElement {
     const inputMode = inputModeForDraft(this.draft);
     const shellMode = inputMode.kind === "shell";
     const queuesInput = this.canSteer || this.isCompacting;
-    const busy = this.disabled || this.isSavingAttachments;
+    const uploading = this.isSavingAttachments || this.isSending;
+    const busy = this.disabled || uploading;
+    const sendLabel = uploading ? "Sending…" : queuesInput ? "Queue" : "Send";
     return html`
       <footer class=${shellMode ? "shell-mode" : ""} @paste=${(event: ClipboardEvent) => { void this.handlePaste(event); }} @dragover=${(event: DragEvent) => { this.handleDragOver(event); }} @drop=${(event: DragEvent) => { void this.handleDrop(event); }}>
         <div class="editor-wrap">
           <div class=${`markdown-editor${this.disabled ? " markdown-editor-disabled" : ""}`} aria-label="Message pi" aria-disabled=${this.disabled ? "true" : "false"}></div>
           ${shellMode ? html`<div class="mode-hint">Shell command${inputMode.excludeFromContext ? " · excluded from context" : ""}</div>` : null}
           ${this.isCompacting && !shellMode ? html`<div class="mode-hint">Compacting history · message will be queued</div>` : null}
+          ${uploading ? html`<div class="mode-hint sending-hint" role="status">${this.isSavingAttachments ? "Saving your files…" : "Sending your files…"}</div>` : null}
           ${this.renderAttachments()}
           <autocomplete-menu .items=${this.completions} .selectedIndex=${this.selectedIndex} .onPick=${(item: CompletionItem) => { this.pick(item); }}></autocomplete-menu>
         </div>
@@ -100,7 +104,7 @@ export class PromptEditor extends LitElement {
           ${this.renderCompactStatus()}
           <input class="attachment-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden @change=${(event: Event) => { void this.handleFileInput(event); }} />
           <button class="attach-button" ?disabled=${busy} title="Attach images" @click=${() => { this.attachmentInput?.click(); }}>Attach</button>
-          <button ?disabled=${busy} title=${queuesInput ? "Queue until the current activity finishes" : "Send message"} @click=${() => { void this.send("followUp"); }}>${queuesInput ? "Queue" : "Send"}</button>
+          <button ?disabled=${busy} title=${queuesInput ? "Queue until the current activity finishes" : "Send message"} @click=${() => { void this.send("followUp"); }}>${sendLabel}</button>
           ${this.canSteer && !this.isCompacting ? html`<button ?disabled=${busy} title="Steer the current response before the next model call" @click=${() => { void this.send("steer"); }}>Steer</button>` : null}
           <button ?disabled=${this.disabled || !this.canStop} title=${this.canStop ? "Stop current work and clear queued messages" : "Nothing running"} @click=${() => this.onStop?.()}>Stop</button>
         </div>
@@ -377,7 +381,7 @@ export class PromptEditor extends LitElement {
   }
 
   private async send(streamingBehavior?: "steer" | "followUp") {
-    if (this.disabled || this.isSavingAttachments) return;
+    if (this.disabled || this.isSavingAttachments || this.isSending) return;
     const text = this.draft.trim();
     const pending = this.attachments;
     if (text === "" && pending.length === 0) return;
@@ -390,7 +394,21 @@ export class PromptEditor extends LitElement {
 
     const attachments = pending.length > 0 ? this.currentAttachments() : undefined;
     this.resetComposer();
-    this.onSend?.(text, behavior, attachments);
+    if (attachments === undefined) {
+      // Plain text messages stay fire-and-forget so the input frees up instantly.
+      void this.onSend?.(text, behavior, attachments);
+      return;
+    }
+    // Image uploads can take a moment (large payloads, server-side resizing,
+    // first-session open), so surface a sending indicator until they land.
+    this.isSending = true;
+    try {
+      await this.onSend?.(text, behavior, attachments);
+    } catch (error) {
+      this.attachmentError = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.isSending = false;
+    }
   }
 
   private async sendWithFolderAttachments(text: string, behavior?: "steer" | "followUp") {
@@ -402,7 +420,7 @@ export class PromptEditor extends LitElement {
       const references = saved.map((file) => fileCompletionInsertText(file.path, false)).join(" ");
       const body = text === "" ? references : `${text}\n\n${references}`;
       this.resetComposer();
-      this.onSend?.(body, behavior);
+      await this.onSend?.(body, behavior);
     } catch (error) {
       this.attachmentError = error instanceof Error ? error.message : String(error);
     } finally {
