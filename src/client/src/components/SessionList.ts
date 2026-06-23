@@ -134,7 +134,7 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
     const selectedTitle = this.selected?.path ?? selectedSummary;
     return html`
       <h2>
-        <button class="section-toggle" aria-expanded=${String(!this.collapsed)} @click=${() => { this.onToggleCollapsed?.(); }}><span class="section-title"><span class="section-name">${this.collapsed ? "▸" : "▾"} Sessions</span>${this.collapsed ? html`<small class="section-selected" title=${selectedTitle}>${selectedSummary}</small>` : null}</span></button>
+        <button class="section-toggle" aria-expanded=${String(!this.collapsed)} @click=${() => { this.onToggleCollapsed?.(); }}><span class="section-title"><span class="section-name">${this.collapsed ? "▸" : "▾"} Sessions</span>${this.collapsed ? html`<small class="section-selected" dir="auto" title=${selectedTitle}>${selectedSummary}</small>` : null}</span></button>
         ${this.renderCurrentSelectionButton(currentSessions)}
         <small class="section-count">${sessionCount}</small>
         <button ?disabled=${!this.canStart} @click=${(event: MouseEvent) => { event.stopPropagation(); this.onStart?.(); }}>+</button>
@@ -213,7 +213,7 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
       >
         <div class="action-main ${selectionActive ? "selecting" : ""}">
           ${showsCheckbox ? html`<input class="session-checkbox" type="checkbox" aria-label=${`Select ${sessionLabel(session)}`} .checked=${bulkSelected} @click=${(event: MouseEvent) => { event.stopPropagation(); }} @change=${() => { this.toggleSelected(session.id); }}>` : null}
-          <span class="action-name">${row.depth > 0 ? html`<span class="tree-marker">↳</span>` : null}${sessionLabel(session)}${row.depth > 2 ? html` <span class="badge">depth ${row.depth}</span>` : null}${row.hasMissingParent ? html` <span class="badge">parent unavailable</span>` : null}</span><small>${this.renderSessionMetaPrefix(session)}${String(session.messageCount)} messages</small>
+          <span class="action-name" dir="auto">${row.depth > 0 ? html`<span class="tree-marker">↳</span>` : null}${sessionLabel(session)}${row.depth > 2 ? html` <span class="badge">depth ${row.depth}</span>` : null}${row.hasMissingParent ? html` <span class="badge">parent unavailable</span>` : null}</span><small>${this.renderSessionMetaPrefix(session)}${String(session.messageCount)} messages</small>
           ${this.renderActivity(session)}
         </div>
         <div class="action-menu">
@@ -375,6 +375,7 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
     .bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
     .bulk-row button { padding: 5px 7px; font-size: 12px; }
     .bulk-row small { display: inline; min-width: 0; color: var(--pi-muted); }
+    .action-name, .section-selected { text-align: start; unicode-bidi: plaintext; }
     .bulk-row .capability-hint { flex: 1 0 100%; color: var(--pi-warning); }
     .bulk-row.selecting { padding: 6px; border: 1px solid var(--pi-border-muted); border-radius: 8px; background: color-mix(in srgb, var(--pi-surface) 65%, transparent); }
     button.danger, .action-menu-panel button.danger { color: var(--pi-danger); }

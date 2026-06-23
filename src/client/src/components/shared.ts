@@ -345,6 +345,7 @@ export const chatStyles = css`
     .msg-meta:focus::before, .msg-meta.expanded::before { content: ""; }
   }
   formatted-text.part { display: block; }
+  formatted-text.part, .queued-message formatted-text { text-align: start; unicode-bidi: plaintext; }
   .part { max-width: 100%; min-width: 0; box-sizing: border-box; overflow: visible; }
   .part + .part { margin-top: 10px; }
   .tool-line { color: var(--pi-warning); }
@@ -355,22 +356,22 @@ export const chatStyles = css`
   .skill-invocation > summary, .skill-read > strong { color: var(--pi-purple); }
   .skill-invocation > small, .skill-read > small { display: block; margin: 6px 0 0; color: var(--pi-muted); }
   summary { cursor: pointer; color: var(--pi-muted); }
-  pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-  .shell-output { color: var(--pi-text); font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.45; }
+  pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; direction: ltr; text-align: left; unicode-bidi: isolate; }
+  .shell-output { color: var(--pi-text); font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.45; direction: ltr; text-align: left; unicode-bidi: isolate; }
   @keyframes pulse { 0%, 100% { transform: scale(.75); opacity: .55; } 50% { transform: scale(1.2); opacity: 1; } }
 `;
 
 export const formattedTextStyles = css`
   :host { display: block; }
-  .formatted { white-space: normal; overflow-wrap: anywhere; line-height: 1.45; }
+  .formatted { white-space: normal; overflow-wrap: anywhere; line-height: 1.45; text-align: start; unicode-bidi: plaintext; }
   p, ul, ol, pre, blockquote, table, .code-block-wrapper { margin: 0 0 10px; }
   :is(p, ul, ol, pre, blockquote, table, .code-block-wrapper):last-child { margin-bottom: 0; }
   ul, ol { padding-left: 22px; }
   li + li { margin-top: 3px; }
-  code { border: 1px solid var(--pi-border); border-radius: 4px; background: var(--pi-bg); padding: 1px 4px; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { border: 1px solid var(--pi-border); border-radius: 4px; background: var(--pi-bg); padding: 1px 4px; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; direction: ltr; text-align: left; unicode-bidi: isolate; }
   .code-block-wrapper { position: relative; }
   .code-block-wrapper pre { margin: 0; padding-right: 40px; }
-  pre { border: 1px solid var(--pi-border); border-radius: 8px; background: var(--pi-bg); padding: 10px; overflow-x: auto; overflow-y: hidden; }
+  pre { border: 1px solid var(--pi-border); border-radius: 8px; background: var(--pi-bg); padding: 10px; overflow-x: auto; overflow-y: hidden; direction: ltr; text-align: left; unicode-bidi: isolate; }
   pre code { border: 0; padding: 0; background: transparent; }
   .code-copy-button { position: absolute; top: 6px; right: 6px; z-index: 1; display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--pi-border); border-radius: 6px; background: var(--pi-surface); color: var(--pi-muted); padding: 0; font: 14px system-ui, sans-serif; line-height: 1; cursor: pointer; }
   .code-copy-button:hover, .code-copy-button:focus { color: var(--pi-text); border-color: var(--pi-accent); }
@@ -466,8 +467,8 @@ export const promptEditorStyles = css`
   textarea, .markdown-editor .cm-editor { box-sizing: border-box; width: 100%; min-height: 54px; max-height: 220px; resize: none; overflow: hidden; border-radius: 8px; border: 1px solid var(--pi-border); background: var(--pi-bg); color: var(--pi-text); font: 16px/1.4 system-ui, sans-serif; }
   textarea { overflow-y: auto; padding: 8px; }
   .markdown-editor .cm-scroller { max-height: 220px; overflow-y: auto; font-family: system-ui, sans-serif; line-height: 1.4; }
-  .markdown-editor .cm-content { min-height: 38px; padding: 8px 44px 8px 8px; caret-color: var(--pi-text); }
-  .markdown-editor .cm-line { padding: 0; }
+  .markdown-editor .cm-content { min-height: 38px; padding: 8px 44px 8px 8px; caret-color: var(--pi-text); text-align: start; unicode-bidi: plaintext; }
+  .markdown-editor .cm-line { padding: 0; unicode-bidi: plaintext; }
   .markdown-editor .cm-placeholder { color: var(--pi-dim); }
   .markdown-editor .cm-focused { outline: none; }
   .shell-mode textarea, .shell-mode .markdown-editor .cm-editor { border-color: var(--pi-success); box-shadow: 0 0 0 1px var(--pi-success-ring); }
