@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import type { GlobalSessionEvent, SessionUiEvent } from "../../shared/apiTypes.js";
@@ -32,11 +35,12 @@ interface TestSession extends PiAgentSession {
   getFollowUpMessages: () => readonly string[];
 }
 
-function fakeSessionManager(cwd = "/workspace"): PiSessionManager {
+function fakeSessionManager(cwd = "/workspace", patch: Partial<PiSessionManager> = {}): PiSessionManager {
   return {
     getCwd: () => cwd,
     getBranch: () => [],
     getLeafId: () => "leaf-1",
+    ...patch,
   };
 }
 
@@ -138,6 +142,16 @@ function sessionGateway(records: ReturnType<typeof sessionRecord>[]): SessionGat
     create: () => fakeSessionManager(),
     list: () => Promise.resolve(records),
     open: () => fakeSessionManager(),
+  };
+}
+
+function emptyArchiveStore(): NonNullable<PiSessionServiceDependencies["archiveStore"]> {
+  return {
+    list: () => Promise.resolve([]),
+    get: () => Promise.resolve(undefined),
+    archive: () => Promise.reject(new Error("archive should not be called")),
+    restore: () => Promise.resolve(),
+    isArchived: () => Promise.resolve(false),
   };
 }
 
@@ -884,6 +898,361 @@ describe("PiSessionService", () => {
         { sessionId: "child-1", cwd: "/workspace-feature", status: "idle" },
       ]);
       void parent;
+      await service.dispose();
+    });
+
+    it("persists tracked child links in the parent and child sessions", async () => {
+      const parentPersisted: { customType: string; data?: unknown }[] = [];
+      const childPersisted: { customType: string; data?: unknown }[] = [];
+      const parent = fakeRuntime("parent-1", {
+        sessionFile: "/tmp/parent-1.jsonl",
+        sessionManager: fakeSessionManager("/workspace", {
+          appendCustomEntry: (customType, data) => {
+            parentPersisted.push({ customType, data });
+            return "parent-entry-1";
+          },
+        }),
+      });
+      const child = fakeRuntime("child-1", {
+        sessionFile: "/tmp/child-1.jsonl",
+        sessionManager: fakeSessionManager("/workspace-feature", {
+          appendCustomEntry: (customType, data) => {
+            childPersisted.push({ customType, data });
+            return "child-entry-1";
+          },
+        }),
+      });
+      const runtimes = [parent.runtime, child.runtime];
+      let index = 0;
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime: () => {
+          const runtime = runtimes[index] ?? child.runtime;
+          index += 1;
+          return Promise.resolve(runtime);
+        },
+        sessionManager: sessionGateway([]),
+        archiveStore: emptyArchiveStore(),
+        spawnTargets: { resolveSpawnTarget: () => Promise.resolve({ allowed: true, cwd: "/workspace-feature" }) },
+        heartbeatIntervalMs: 60_000,
+      });
+
+      await service.start("/workspace");
+      await service.spawnSubsession({ spawningCwd: "/workspace", parentSessionId: "parent-1", parentSessionFile: "/tmp/parent-1.jsonl", prompt: "do the slice", cwd: "/workspace-feature" });
+
+      expect(parentPersisted).toEqual([
+        {
+          customType: "pi-web.subsession.link",
+          data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1", spawnedSessionFile: "/tmp/child-1.jsonl", cwd: "/workspace-feature" },
+        },
+      ]);
+      expect(childPersisted).toEqual([
+        {
+          customType: "pi-web.subsession.spawned",
+          data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1" },
+        },
+      ]);
+      await service.dispose();
+    });
+
+    it("hydrates persisted child links after a service restart so the parent can inspect them", async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), "pi-web-subsession-"));
+      const parentFile = join(tempDir, "parent.jsonl");
+      const childFile = join(tempDir, "child.jsonl");
+      await writeFile(parentFile, `${JSON.stringify({ type: "session", version: 3, id: "parent-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace" })}\n`, "utf8");
+      await writeFile(childFile, `${JSON.stringify({ type: "session", version: 3, id: "child-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace-feature", parentSession: parentFile })}\n`, "utf8");
+
+      try {
+        const childManager = fakeSessionManager("/workspace-feature", {
+          getBranch: () => [{ type: "message", message: { role: "assistant", content: "finished" } }],
+        });
+        const parent = fakeRuntime("parent-1", {
+          sessionFile: parentFile,
+          sessionManager: fakeSessionManager("/workspace", {
+            getEntries: () => [{ type: "custom", customType: "pi-web.subsession.link", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1", spawnedSessionFile: childFile, cwd: "/workspace-feature" } }],
+          }),
+        });
+        const child = fakeRuntime("child-1", { sessionFile: childFile, sessionManager: childManager });
+        const runtimes = [parent.runtime, child.runtime];
+        let index = 0;
+        const open = vi.fn(() => childManager);
+        const service = new PiSessionService(new CapturingSessionEventHub(), {
+          createAgentRuntime: () => {
+            const runtime = runtimes[index] ?? child.runtime;
+            index += 1;
+            return Promise.resolve(runtime);
+          },
+          sessionManager: { create: () => parent.session.sessionManager, list: () => Promise.resolve([]), listAll: () => Promise.resolve([]), open },
+          archiveStore: emptyArchiveStore(),
+          heartbeatIntervalMs: 60_000,
+        });
+
+        await service.start("/workspace");
+
+        await expect(service.checkSubsession("parent-1", "child-1")).resolves.toEqual({
+          sessionId: "child-1",
+          cwd: "/workspace-feature",
+          status: "idle",
+          finalText: "finished",
+          messageCount: 1,
+        });
+        expect(open).toHaveBeenCalledWith(childFile);
+        await service.dispose();
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("ignores stale persisted child links when the child no longer records the parent", async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), "pi-web-subsession-stale-"));
+      const parentFile = join(tempDir, "parent.jsonl");
+      const childFile = join(tempDir, "child.jsonl");
+      await writeFile(parentFile, `${JSON.stringify({ type: "session", version: 3, id: "parent-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace" })}\n`, "utf8");
+      await writeFile(childFile, `${JSON.stringify({ type: "session", version: 3, id: "child-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace-feature" })}\n`, "utf8");
+
+      try {
+        const parent = fakeRuntime("parent-1", {
+          sessionFile: parentFile,
+          sessionManager: fakeSessionManager("/workspace", {
+            getEntries: () => [{ type: "custom", customType: "pi-web.subsession.link", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1", spawnedSessionFile: childFile, cwd: "/workspace-feature" } }],
+          }),
+        });
+        const service = new PiSessionService(new CapturingSessionEventHub(), {
+          createAgentRuntime: runtimeCreator(parent.runtime),
+          sessionManager: { create: () => parent.session.sessionManager, list: () => Promise.resolve([]), listAll: () => Promise.resolve([]), open: () => fakeSessionManager() },
+          archiveStore: emptyArchiveStore(),
+          heartbeatIntervalMs: 60_000,
+        });
+
+        await service.start("/workspace");
+
+        await expect(service.listSubsessions("parent-1")).resolves.toEqual([]);
+        await service.dispose();
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("hydrates persisted links to archived children without scanning unrelated child headers", async () => {
+      const parentFile = "/sessions/parent-1.jsonl";
+      const parent = fakeRuntime("parent-1", {
+        sessionFile: parentFile,
+        sessionManager: fakeSessionManager("/workspace", {
+          getEntries: () => [{ type: "custom", customType: "pi-web.subsession.link", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1", spawnedSessionFile: "/sessions/child-1.jsonl", cwd: "/workspace-feature" } }],
+        }),
+      });
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime: runtimeCreator(parent.runtime),
+        sessionManager: { create: () => parent.session.sessionManager, list: () => Promise.resolve([]), listAll: () => Promise.resolve([]), open: () => fakeSessionManager() },
+        archiveStore: {
+          ...emptyArchiveStore(),
+          list: () => Promise.resolve([]),
+          get: (sessionId) => Promise.resolve(sessionId === "child-1" ? { sessionId: "child-1", cwd: "/workspace-feature", archivedAt: "2026-01-01T00:00:00.000Z", parentSessionPath: parentFile } : undefined),
+          isArchived: (sessionId) => Promise.resolve(sessionId === "child-1"),
+        },
+        heartbeatIntervalMs: 60_000,
+      });
+
+      await service.start("/workspace");
+
+      await expect(service.listSubsessions("parent-1")).resolves.toEqual([
+        { sessionId: "child-1", cwd: "/workspace-feature", status: "archived" },
+      ]);
+      await service.dispose();
+    });
+
+    it("does not hydrate parent links without a child file or exact archived child validation", async () => {
+      const parentFile = "/sessions/parent-1.jsonl";
+      const parent = fakeRuntime("parent-1", {
+        sessionFile: parentFile,
+        sessionManager: fakeSessionManager("/workspace", {
+          getEntries: () => [{ type: "custom", customType: "pi-web.subsession.link", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child", cwd: "/workspace-feature" } }],
+        }),
+      });
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime: runtimeCreator(parent.runtime),
+        sessionManager: { create: () => parent.session.sessionManager, list: () => Promise.resolve([]), listAll: () => Promise.resolve([]), open: () => fakeSessionManager() },
+        archiveStore: {
+          ...emptyArchiveStore(),
+          get: (sessionId) => Promise.resolve(sessionId === "child" ? { sessionId: "child-fork", cwd: "/workspace-feature", archivedAt: "2026-01-01T00:00:00.000Z", parentSessionPath: parentFile } : undefined),
+        },
+        heartbeatIntervalMs: 60_000,
+      });
+
+      await service.start("/workspace");
+
+      await expect(service.listSubsessions("parent-1")).resolves.toEqual([]);
+      await service.dispose();
+    });
+
+    it("does not invent subsession links from existing child session headers", async () => {
+      const parentFile = "/sessions/parent-1.jsonl";
+      const childRecord = { ...sessionRecord("child-1", "/workspace-feature"), path: "/sessions/child-1.jsonl", parentSessionPath: parentFile };
+      const parent = fakeRuntime("parent-1", {
+        sessionFile: parentFile,
+        sessionManager: fakeSessionManager("/workspace", { getEntries: () => [] }),
+      });
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime: runtimeCreator(parent.runtime),
+        sessionManager: { create: () => parent.session.sessionManager, list: () => Promise.resolve([]), listAll: () => Promise.resolve([childRecord]), open: () => fakeSessionManager() },
+        archiveStore: emptyArchiveStore(),
+        heartbeatIntervalMs: 60_000,
+      });
+
+      await service.start("/workspace");
+
+      await expect(service.listSubsessions("parent-1")).resolves.toEqual([]);
+      await service.dispose();
+    });
+
+    it("does not hydrate copied parent links when the opened parent has a different id", async () => {
+      const forkedParent = fakeRuntime("parent-fork-1", {
+        sessionFile: "/sessions/parent-fork-1.jsonl",
+        sessionManager: fakeSessionManager("/workspace", {
+          getEntries: () => [{ type: "custom", customType: "pi-web.subsession.link", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1", spawnedSessionFile: "/sessions/child-1.jsonl", cwd: "/workspace-feature" } }],
+        }),
+      });
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime: runtimeCreator(forkedParent.runtime),
+        sessionManager: { create: () => forkedParent.session.sessionManager, list: () => Promise.resolve([]), listAll: () => Promise.resolve([]), open: () => fakeSessionManager() },
+        archiveStore: emptyArchiveStore(),
+        heartbeatIntervalMs: 60_000,
+      });
+
+      await service.start("/workspace");
+
+      await expect(service.listSubsessions("parent-fork-1")).resolves.toEqual([]);
+      await service.dispose();
+    });
+
+    it("relinks a spawned child when the child session is opened after restart", async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), "pi-web-subsession-open-child-"));
+      const parentFile = join(tempDir, "parent.jsonl");
+      const childFile = join(tempDir, "child.jsonl");
+      await writeFile(parentFile, `${JSON.stringify({ type: "session", version: 3, id: "parent-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace" })}\n`, "utf8");
+      await writeFile(childFile, `${JSON.stringify({ type: "session", version: 3, id: "child-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace-feature", parentSession: parentFile })}\n`, "utf8");
+
+      try {
+        const childManager = fakeSessionManager("/workspace-feature", {
+          getHeader: () => ({ parentSession: parentFile }),
+          getEntries: () => [{ type: "custom", customType: "pi-web.subsession.spawned", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1" } }],
+        });
+        const parentManager = fakeSessionManager("/workspace");
+        const child = fakeRuntime("child-1", { sessionFile: childFile, sessionManager: childManager });
+        const parent = fakeRuntime("parent-1", { sessionFile: parentFile, sessionManager: parentManager });
+        const runtimes = [child.runtime, parent.runtime];
+        let index = 0;
+        const open = vi.fn((path: string) => path === parentFile ? parentManager : childManager);
+        const service = new PiSessionService(new CapturingSessionEventHub(), {
+          createAgentRuntime: () => {
+            const runtime = runtimes[index] ?? parent.runtime;
+            index += 1;
+            return Promise.resolve(runtime);
+          },
+          sessionManager: {
+            create: () => childManager,
+            list: () => Promise.resolve([{ ...sessionRecord("child-1", "/workspace-feature"), path: childFile, parentSessionPath: parentFile }]),
+            listAll: () => Promise.resolve([]),
+            open,
+          },
+          archiveStore: emptyArchiveStore(),
+          heartbeatIntervalMs: 60_000,
+        });
+
+        await service.status(sessionRef("child-1", "/workspace-feature"));
+        child.session.isStreaming = true;
+        child.emit({ type: "agent_start" });
+        child.session.isStreaming = false;
+        child.emit({ type: "agent_end" });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(parent.calls.sendCustomMessage).toHaveLength(1);
+        expect(parent.calls.sendCustomMessage[0]?.message.content).toContain("Subsession child-1 stopped working");
+        expect(open).toHaveBeenCalledWith(parentFile);
+        await service.dispose();
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not relink a child marker when the child header points at a different parent id", async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), "pi-web-subsession-wrong-parent-"));
+      const mismatchedParentFile = join(tempDir, "other-parent.jsonl");
+      const actualParentFile = join(tempDir, "parent.jsonl");
+      const childFile = join(tempDir, "child.jsonl");
+      await writeFile(mismatchedParentFile, `${JSON.stringify({ type: "session", version: 3, id: "other-parent", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace" })}\n`, "utf8");
+      await writeFile(childFile, `${JSON.stringify({ type: "session", version: 3, id: "child-1", timestamp: "2026-01-01T00:00:00.000Z", cwd: "/workspace-feature", parentSession: mismatchedParentFile })}\n`, "utf8");
+
+      try {
+        const childManager = fakeSessionManager("/workspace-feature", {
+          getHeader: () => ({ parentSession: mismatchedParentFile }),
+          getEntries: () => [{ type: "custom", customType: "pi-web.subsession.spawned", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1" } }],
+        });
+        const parent = fakeRuntime("parent-1", { sessionFile: actualParentFile, sessionManager: fakeSessionManager("/workspace") });
+        const child = fakeRuntime("child-1", { sessionFile: childFile, sessionManager: childManager });
+        const runtimes = [child.runtime, parent.runtime];
+        let index = 0;
+        const open = vi.fn((path: string) => path === actualParentFile ? parent.session.sessionManager : childManager);
+        const service = new PiSessionService(new CapturingSessionEventHub(), {
+          createAgentRuntime: () => {
+            const runtime = runtimes[index] ?? parent.runtime;
+            index += 1;
+            return Promise.resolve(runtime);
+          },
+          sessionManager: {
+            create: () => childManager,
+            list: () => Promise.resolve([{ ...sessionRecord("child-1", "/workspace-feature"), path: childFile, parentSessionPath: mismatchedParentFile }]),
+            listAll: () => Promise.resolve([{ ...sessionRecord("parent-1", "/workspace"), path: actualParentFile }]),
+            open,
+          },
+          archiveStore: emptyArchiveStore(),
+          heartbeatIntervalMs: 60_000,
+        });
+
+        await service.status(sessionRef("child-1", "/workspace-feature"));
+        child.session.isStreaming = true;
+        child.emit({ type: "agent_start" });
+        child.session.isStreaming = false;
+        child.emit({ type: "agent_end" });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(parent.calls.sendCustomMessage).toHaveLength(0);
+        expect(open).not.toHaveBeenCalledWith(actualParentFile);
+        await service.dispose();
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("does not relink copied child markers when the opened child has a different id", async () => {
+      const parentFile = "/sessions/parent-1.jsonl";
+      const childFile = "/sessions/child-fork-1.jsonl";
+      const childManager = fakeSessionManager("/workspace-feature", {
+        getHeader: () => ({ parentSession: parentFile }),
+        getEntries: () => [{ type: "custom", customType: "pi-web.subsession.spawned", data: { version: 1, spawnedBySessionId: "parent-1", spawnedSessionId: "child-1" } }],
+      });
+      const child = fakeRuntime("child-fork-1", { sessionFile: childFile, sessionManager: childManager });
+      const open = vi.fn(() => childManager);
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime: runtimeCreator(child.runtime),
+        sessionManager: {
+          create: () => childManager,
+          list: () => Promise.resolve([{ ...sessionRecord("child-fork-1", "/workspace-feature"), path: childFile, parentSessionPath: parentFile }]),
+          listAll: () => Promise.resolve([]),
+          open,
+        },
+        archiveStore: emptyArchiveStore(),
+        heartbeatIntervalMs: 60_000,
+      });
+
+      await service.status(sessionRef("child-fork-1", "/workspace-feature"));
+      child.session.isStreaming = true;
+      child.emit({ type: "agent_start" });
+      child.session.isStreaming = false;
+      child.emit({ type: "agent_end" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(open).not.toHaveBeenCalledWith(parentFile);
+      await expect(service.listSubsessions("parent-1")).resolves.toEqual([]);
       await service.dispose();
     });
 
