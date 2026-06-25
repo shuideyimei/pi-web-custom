@@ -176,20 +176,32 @@ export interface QueuedSessionMessage {
 }
 
 /**
- * A binary attachment carried with a prompt. The wire format mirrors pi's own
- * `ImageContent` shape (`{ type: "image", data, mimeType }`) so attachments are
- * fully compatible with the underlying pi coding agent.
+ * A pi-native image attachment carried with a prompt. The wire format mirrors
+ * pi's own `ImageContent` shape (`{ type: "image", data, mimeType }`) so these
+ * attachments are compatible with native multimodal delivery after validation.
  */
-export interface PromptAttachment {
-  /** Kind of attachment. Only images are supported by pi today. */
+export interface PromptImageAttachment {
   kind: "image";
-  /** IANA mime type (for example "image/png"). */
+  /** Supported image MIME type (image/png, image/jpeg, image/gif, or image/webp). */
   mimeType: string;
   /** Base64-encoded binary payload (no data: URL prefix). */
   data: string;
   /** Optional original filename, used for previews and folder-mode filenames. */
   name?: string;
 }
+
+/** A general file attachment that must be saved into the workspace before use. */
+export interface PromptFileAttachment {
+  kind: "file";
+  /** Non-empty IANA MIME type (for example "application/pdf"). */
+  mimeType: string;
+  /** Base64-encoded binary payload (no data: URL prefix). Empty for zero-byte files. */
+  data: string;
+  /** Optional original filename, used for previews and folder-mode filenames. */
+  name?: string;
+}
+
+export type PromptAttachment = PromptImageAttachment | PromptFileAttachment;
 
 /**
  * How prompt attachments should be delivered to the session.

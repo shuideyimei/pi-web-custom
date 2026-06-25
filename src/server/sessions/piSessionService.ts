@@ -957,7 +957,7 @@ export class PiSessionService {
   }
 
   async saveAttachments(ref: PiSessionLookup, attachments: unknown, folder?: string): Promise<SavedPromptAttachment[]> {
-    const parsed = parsePromptAttachments(attachments, { enforceInlineSizeLimit: false });
+    const parsed = parsePromptAttachments(attachments, { enforceInlineSizeLimit: false, allowFileAttachments: true });
     if (parsed.length === 0) return [];
     await this.assertWritable(ref);
     const active = await this.getActive(ref);
