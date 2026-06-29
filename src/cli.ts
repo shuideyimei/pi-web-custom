@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultPiWebConfigPath, defaultPiWebDataDir, examplePiWebConfig } from "./config.js";
+import { sessiondSocketPath } from "./sessiond/config.js";
 import { packageVersion, printPiWebVersionReport } from "./piWebVersionReport.js";
 import { checkNodePtyDarwinSpawnHelper, formatNodePtyDarwinSpawnHelperCheck } from "./server/diagnostics/nodePtySpawnHelper.js";
 
@@ -66,6 +67,11 @@ interface ServiceShell {
 interface ServiceExecutable {
   command: string;
   checks: Check[];
+}
+
+interface ManualSessiondCommand {
+  command: string;
+  cwd?: string;
 }
 
 interface ServiceExecutables {
@@ -872,6 +878,119 @@ function serviceAction(action: "start" | "stop" | "restart" | "status"): void {
   else launchdServiceAction(action, refs);
 }
 
+async function webSessionRestart(): Promise<void> {
+  const backend = currentServiceBackend();
+  if (backend !== undefined && serviceBackendControlAvailable(backend)) {
+    const refs = installedServiceRefs(backend).filter((ref) => ref.id === "sessiond");
+    if (refs.length === 0) throw new Error("No PI WEB session daemon service files found.");
+    if (backend.kind === "systemd") systemdServiceAction("restart", refs);
+    else launchdServiceAction("restart", refs);
+    return;
+  }
+
+  await restartManualSessiond();
+}
+
+function serviceBackendControlAvailable(backend: ServiceBackend): boolean {
+  if (backend.kind === "systemd") return capture("systemctl", ["--user", "show-environment"]).status === 0;
+  return capture("launchctl", ["print", launchdDomain()]).status === 0;
+}
+
+function resolveManualSessiondCommand(): ManualSessiondCommand {
+  const root = packageRootPath();
+  if (isDevCheckout(root)) return { command: "npm run start:sessiond", cwd: root };
+  return { command: serviceExecutable("PI_WEB_SESSIOND_EXEC", "pi-web-sessiond", packageEntrypointPath("sessiond"), { kind: "launchd", label: "manual run" }).command };
+}
+
+function isDevCheckout(root: string): boolean {
+  try {
+    if (!existsSync(join(root, "src", "server", "sessiond.ts"))) return false;
+    const parsed: unknown = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    if (!isRecord(parsed) || parsed["name"] !== PI_WEB_PACKAGE_NAME) return false;
+    const scripts = parsed["scripts"];
+    return isRecord(scripts) && typeof scripts["start:sessiond"] === "string";
+  } catch {
+    return false;
+  }
+}
+
+function stopManualSessiondProcesses(): number[] {
+  const result = capture("ps", ["-eo", "pid=,command="]);
+  if (result.status !== 0) return [];
+
+  const pids: number[] = [];
+  for (const line of result.stdout.split("\n")) {
+    const match = /^(\d+)\s+(.*)$/.exec(line.trim());
+    if (match === null) continue;
+    const pid = Number(match[1]);
+    const command = match[2];
+    if (!Number.isInteger(pid) || pid === process.pid || command === undefined) continue;
+    if (!command.includes("pi-web-sessiond") && !command.includes("src/server/sessiond.ts") && !command.includes("dist/server/sessiond.js")) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+      pids.push(pid);
+    } catch {
+      // Best-effort: a stale PID may already be gone.
+    }
+  }
+  return pids;
+}
+
+async function waitForProcessesToExit(pids: number[], timeoutMs = 5_000): Promise<number[]> {
+  const deadline = Date.now() + timeoutMs;
+  let alive = pids;
+  while (Date.now() < deadline) {
+    alive = alive.filter((pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (alive.length === 0) return [];
+    await new Promise((resolve) => { setTimeout(resolve, 100); });
+  }
+  return alive;
+}
+
+async function terminateManualSessiondProcesses(): Promise<void> {
+  const stoppedPids = stopManualSessiondProcesses();
+  const alive = await waitForProcessesToExit(stoppedPids);
+  for (const pid of alive) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Best-effort: a stale PID may already be gone.
+    }
+  }
+  await waitForProcessesToExit(alive, 2_000);
+}
+
+async function waitForFile(path: string, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(path)) return;
+    await new Promise((resolve) => { setTimeout(resolve, 100); });
+  }
+  throw new Error(`Timed out waiting for ${path}`);
+}
+
+async function restartManualSessiond(): Promise<void> {
+  const socketPath = sessiondSocketPath();
+  await terminateManualSessiondProcesses();
+  await rm(socketPath, { force: true });
+
+  const sessiond = resolveManualSessiondCommand();
+  const [command, ...args] = serviceShellCommand(sessiond.command, sessiond.cwd);
+  if (command === undefined) throw new Error("Unable to resolve session daemon command.");
+  const child = spawn(command, args, { detached: true, stdio: "ignore", env: process.env });
+  child.unref();
+
+  await waitForFile(socketPath);
+  console.log("Session daemon restarted.");
+}
+
 function logs(): void {
   const backend = requireServiceBackend("pi-web logs");
   const refs = installedServiceRefs(backend);
@@ -1067,6 +1186,7 @@ Usage:
   pi-web install [--dev] [--host 127.0.0.1] [--port 8504] [--config ~/.config/pi-web/config.json]
   pi-web uninstall
   pi-web start|stop|restart|status|logs
+  pi-web websession restart
   pi-web doctor
   pi-web version
 
@@ -1079,11 +1199,19 @@ Development service install from a checkout:
 `);
 }
 
+export function parseCliCommand(args: string[]): { command: string; args: string[] } {
+  const [command = "help", ...rest] = args;
+  if (command !== "websession") return { command, args: rest };
+  const [subcommand = "help", ...subArgs] = rest;
+  return { command: `websession ${subcommand}`, args: subArgs };
+}
+
 async function main(): Promise<void> {
-  const [command = "help", ...args] = process.argv.slice(2);
+  const { command, args } = parseCliCommand(process.argv.slice(2));
   if (command === "install") await install(args);
   else if (command === "uninstall") await uninstall();
   else if (command === "start" || command === "stop" || command === "restart" || command === "status") serviceAction(command);
+  else if (command === "websession restart") await webSessionRestart();
   else if (command === "logs") logs();
   else if (command === "doctor") await doctor();
   else if (command === "version") await printPiWebVersionReport();

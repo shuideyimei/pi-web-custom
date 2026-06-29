@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { commandWithVersionCheck, isCliEntrypoint } from "./cli.js";
+import { commandWithVersionCheck, isCliEntrypoint, parseCliCommand } from "./cli.js";
 
 const originalShell = process.env["SHELL"];
 
@@ -30,6 +30,16 @@ describe("commandWithVersionCheck", () => {
     const command = commandWithVersionCheck("npm");
     expect(command).toBe("command -v npm && begin; npm --version 2>&1 || true; end");
     expect(command).not.toContain("(");
+  });
+});
+
+describe("parseCliCommand", () => {
+  it("maps websession restart to a dedicated command", () => {
+    expect(parseCliCommand(["websession", "restart"])).toEqual({ command: "websession restart", args: [] });
+  });
+
+  it("passes through regular commands unchanged", () => {
+    expect(parseCliCommand(["restart"])).toEqual({ command: "restart", args: [] });
   });
 });
 

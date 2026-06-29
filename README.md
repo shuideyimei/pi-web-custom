@@ -59,6 +59,7 @@ Useful commands:
 pi-web status
 pi-web logs
 pi-web restart
+pi-web websession restart
 pi-web doctor
 pi-web version
 pi-web uninstall
