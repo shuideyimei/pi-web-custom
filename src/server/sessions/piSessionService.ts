@@ -18,7 +18,7 @@ import type { ClientArchiveSessionsResponse, ClientCommand, ClientCommandResult,
 import { pageMessagesAtSafeBoundary } from "./messagePaging.js";
 import type { SessionEventHub } from "../realtime/sessionEventHub.js";
 import { BUILTIN_COMMANDS } from "./builtinCommands.js";
-import { SessionCommandService } from "./sessionCommandService.js";
+import { listRuntimeCommands, SessionCommandService } from "./sessionCommandService.js";
 import { SessionArchiveStore, type ArchivedSessionRecord, type ArchiveSessionInput } from "./sessionArchiveStore.js";
 import { findArchiveCandidateByIdOrPrefix, planSessionArchiveTree, type SessionArchiveTreeCandidate } from "./sessionArchiveTree.js";
 import type { ActiveSession } from "./sessionRuntimeStore.js";
@@ -27,7 +27,9 @@ import { fallbackSessionName, generateShortSessionName } from "./sessionNameGene
 import { computeEditPreview, type EditPreviewResult } from "./editPreview.js";
 import { createPiSessionManagerGateway } from "./piSessionManagerGateway.js";
 import { attachmentsToInlineImages, saveAttachmentsToWorkspace } from "./attachmentService.js";
+import { WebExtensionUIContext } from "./webExtensionUI.js";
 import { parsePromptAttachments } from "../../shared/promptAttachments.js";
+import { summarizeSubagentArgs } from "../../shared/subagentDisplay.js";
 import type { SavedPromptAttachment } from "../../shared/apiTypes.js";
 
 import { cwdPathsEqual } from "../workingDirectory.js";
@@ -170,12 +172,31 @@ interface PiExtensionError {
 }
 
 interface PiExtensionBindings {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  uiContext?: any;
+  mode?: "tui" | "rpc" | "json" | "print";
+  commandContextActions?: PiExtensionCommandContextActions;
+  shutdownHandler?: () => void;
   onError?: (error: PiExtensionError) => void;
+}
+
+interface PiExtensionCommandContextActions {
+  waitForIdle: () => Promise<void>;
+  newSession: (options?: object) => Promise<{ cancelled: boolean }>;
+  fork: (entryId: string, options?: object) => Promise<{ cancelled: boolean }>;
+  navigateTree: (targetId: string, options?: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string }) => Promise<{ cancelled: boolean }>;
+  switchSession: (sessionPath: string, options?: object) => Promise<{ cancelled: boolean }>;
+  reload: () => Promise<void>;
+}
+
+interface PiAgentWaiter {
+  waitForIdle(): Promise<void>;
 }
 
 export interface PiAgentSession {
   modelRegistry: ModelRegistryInstance;
   sessionManager: PiSessionManager;
+  agent?: PiAgentWaiter;
   scopedModels: readonly { model: AgentModel; thinkingLevel?: ClientThinkingLevel }[];
   sessionId: string;
   sessionFile: string | undefined;
@@ -196,7 +217,7 @@ export interface PiAgentSession {
   getUserMessagesForForking(): readonly { entryId: string; text: string }[];
   getSessionStats(): { sessionId: string; totalMessages: number; userMessages: number; assistantMessages: number; toolCalls: number; tokens: ClientSessionStatus["tokens"]; cost: number };
   getContextUsage(): ClientSessionStatus["contextUsage"] | undefined;
-  prompt(text: string, options?: { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[] }): Promise<void>;
+  prompt(text: string, options?: { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[]; source?: "interactive" | "rpc" }): Promise<void>;
   sendCustomMessage(message: { customType: string; content: string; display: boolean; details?: unknown }, options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" }): Promise<void>;
   executeBash(command: string, onChunk?: (chunk: string) => void, options?: { excludeFromContext?: boolean }): Promise<{ output: string; exitCode: number | undefined; cancelled: boolean; truncated: boolean; fullOutputPath?: string }>;
   abort(): Promise<void>;
@@ -209,13 +230,17 @@ export interface PiAgentSession {
   setThinkingLevel(level: ClientThinkingLevel): void;
   cycleThinkingLevel(): ClientThinkingLevel | undefined;
   setSessionName(name: string): void;
+  navigateTree?(targetId: string, options?: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string }): Promise<{ cancelled: boolean }>;
+  reload?(): Promise<void>;
 }
 
 export interface PiSessionRuntime {
   readonly cwd: string;
   readonly session: PiAgentSession;
   setRebindSession(rebindSession?: (session: PiAgentSession) => Promise<void>): void;
+  newSession?(options?: object): Promise<{ cancelled: boolean }>;
   fork(entryId: string, options?: { position?: "before" | "at" }): Promise<{ cancelled: boolean; selectedText?: string }>;
+  switchSession?(sessionPath: string, options?: object): Promise<{ cancelled: boolean }>;
   dispose(): Promise<void>;
 }
 
@@ -304,6 +329,7 @@ export interface PiSessionServiceDependencies {
 
 export class PiSessionService {
   private readonly active = new Map<string, ActiveSession<PiSessionRuntime>>();
+  private readonly extensionUis = new Map<string, WebExtensionUIContext>();
   private readonly activities = new Map<string, { phase: "active" | "idle" | "error"; label: string; detail?: string; at: string }>();
   private readonly heartbeat: NodeJS.Timeout;
   private readonly commandService: SessionCommandService<PiAgentSession>;
@@ -385,6 +411,7 @@ export class PiSessionService {
     this.clearCompactionDrainTimers();
     const activeSessions = Array.from(new Set(this.active.values()));
     this.active.clear();
+    this.extensionUis.clear();
     this.activities.clear();
     this.compactionPromptQueues.clear();
     this.authLossWarnings.clear();
@@ -897,16 +924,7 @@ export class PiSessionService {
 
   async commands(ref: PiSessionLookup): Promise<ClientCommand[]> {
     const session = await this.getOrOpen(ref);
-    const commands: ClientCommand[] = [...BUILTIN_COMMANDS];
-    for (const command of session.extensionRunner.getRegisteredCommands()) {
-      commands.push({ name: command.invocationName, ...(command.description === undefined ? {} : { description: command.description }), source: "extension" });
-    }
-    for (const template of session.promptTemplates) {
-      commands.push({ name: template.name, ...(template.description === undefined ? {} : { description: template.description }), source: "prompt" });
-    }
-    for (const skill of session.resourceLoader.getSkills().skills) {
-      commands.push({ name: `skill:${skill.name}`, ...(skill.description === undefined ? {} : { description: skill.description }), source: "skill" });
-    }
+    const commands: ClientCommand[] = [...BUILTIN_COMMANDS, ...listRuntimeCommands(session)];
     return commands.sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -1010,6 +1028,8 @@ export class PiSessionService {
   async respondToCommand(ref: PiSessionLookup, requestId: string, value: string): Promise<ClientCommandResult> {
     await this.assertWritable(ref);
     const active = await this.getActive(ref);
+    const extensionUi = this.extensionUis.get(active.runtime.session.sessionId);
+    if (extensionUi?.respondToDialog(requestId, value) === true) return { type: "done" };
     return this.commandService.respond(active.runtime.session.sessionId, requestId, value);
   }
 
@@ -1180,6 +1200,7 @@ export class PiSessionService {
     const active = this.active.get(sessionId);
     if (!active) return;
     this.active.delete(sessionId);
+    this.extensionUis.delete(sessionId);
     this.activities.delete(sessionId);
     this.workspaceActivity?.removeSession(sessionId, active.runtime.session.sessionManager.getCwd());
     this.clearAuthLossWarningsForSession(sessionId);
@@ -1238,11 +1259,11 @@ export class PiSessionService {
 
   private async create(sessionManager: PiSessionManager, cwd: string): Promise<ActiveSession<PiSessionRuntime>> {
     const runtime = await this.createAgentRuntime(this.createRuntime, { cwd, agentDir: this.agentDir, sessionManager });
-    await this.bindSessionExtensions(runtime.session);
+    await this.bindSessionExtensions(runtime);
     const active: ActiveSession<PiSessionRuntime> = { runtime, unsubscribe: noop };
     this.bindRuntime(active);
     runtime.setRebindSession(async (session) => {
-      await this.bindSessionExtensions(session);
+      await this.bindSessionExtensions(runtime);
       this.bindRuntime(active);
       await this.recoverSubsessionTrackingForOpenedSession(session);
     });
@@ -1252,14 +1273,42 @@ export class PiSessionService {
     return active;
   }
 
-  private async bindSessionExtensions(session: PiAgentSession): Promise<void> {
+  private async bindSessionExtensions(runtime: PiSessionRuntime): Promise<void> {
+    const { session } = runtime;
+    const uiContext = new WebExtensionUIContext(session.sessionId, this.events);
+    this.extensionUis.set(session.sessionId, uiContext);
     await session.bindExtensions({
+      uiContext,
+      mode: "rpc",
+      commandContextActions: this.extensionCommandContextActions(runtime),
+      shutdownHandler: () => {
+        this.stop({ id: session.sessionId, cwd: runtime.cwd });
+      },
       onError: (error) => {
         const message = `${error.extensionPath}: ${error.error}`;
         this.publishActivity(session, "extension error", "error", message);
         this.events.publish(session.sessionId, { type: "session.error", message });
       },
     });
+  }
+
+  private extensionCommandContextActions(runtime: PiSessionRuntime): PiExtensionCommandContextActions {
+    return {
+      waitForIdle: async () => {
+        await runtime.session.agent?.waitForIdle();
+      },
+      newSession: async (options) => runtime.newSession?.(options) ?? { cancelled: true },
+      fork: async (entryId, options) => {
+        const forkOptions = forkOptionsFromExtension(options);
+        const result = await runtime.fork(entryId, forkOptions);
+        return { cancelled: result.cancelled };
+      },
+      navigateTree: async (targetId, options) => runtime.session.navigateTree?.(targetId, options) ?? { cancelled: true },
+      switchSession: async (sessionPath, options) => runtime.switchSession?.(sessionPath, options) ?? { cancelled: true },
+      reload: async () => {
+        await runtime.session.reload?.();
+      },
+    };
   }
 
   private bindRuntime(active: ActiveSession<PiSessionRuntime>): void {
@@ -1835,11 +1884,17 @@ function userMessage(text: string, images: ImageContent[]): { role: "user"; cont
   return { role: "user", content };
 }
 
-function buildPromptOptions(behavior: QueuedPromptKind | undefined, images: ImageContent[]): { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[] } | undefined {
-  const options: { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[] } = {};
+function buildPromptOptions(behavior: QueuedPromptKind | undefined, images: ImageContent[]): { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[]; source: "rpc" } {
+  const options: { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[]; source: "rpc" } = { source: "rpc" };
   if (behavior !== undefined) options.streamingBehavior = behavior;
   if (images.length > 0) options.images = images;
-  return Object.keys(options).length > 0 ? options : undefined;
+  return options;
+}
+
+function forkOptionsFromExtension(options: object | undefined): { position?: "before" | "at" } | undefined {
+  if (options === undefined || !isRecord(options)) return undefined;
+  const position = options["position"];
+  return position === "before" || position === "at" ? { position } : undefined;
 }
 
 function stringValue(value: unknown): string {
@@ -1895,14 +1950,17 @@ function toClientEvent(event: unknown): SessionUiEvent {
   const eventType = getString(event, "type");
   const assistantMessageEvent = getProperty(event, "assistantMessageEvent");
   if (eventType === "message_update" && getString(assistantMessageEvent, "type") === "text_delta") {
+    if (!isAssistantContentDelta(assistantMessageEvent)) return { type: "pi.event", eventType: "message_update" };
     return { type: "assistant.delta", text: getString(assistantMessageEvent, "delta") ?? "" };
   }
   if (eventType === "message_update" && getString(assistantMessageEvent, "type") === "thinking_delta") {
+    if (!isAssistantContentDelta(assistantMessageEvent)) return { type: "pi.event", eventType: "message_update" };
     return { type: "assistant.thinking.delta", text: getString(assistantMessageEvent, "delta") ?? "" };
   }
   if (eventType === "tool_execution_start") {
     const args = getProperty(event, "args");
-    return { type: "tool.start", toolName: getString(event, "toolName") ?? "", toolCallId: getString(event, "toolCallId") ?? "", summary: summarizeToolArgs(args), args };
+    const toolName = getString(event, "toolName") ?? "";
+    return { type: "tool.start", toolName, toolCallId: getString(event, "toolCallId") ?? "", summary: summarizeToolArgs(args, toolName), args };
   }
   if (eventType === "tool_execution_update") {
     const partialResult = getProperty(event, "partialResult");
@@ -1921,7 +1979,16 @@ function toClientEvent(event: unknown): SessionUiEvent {
   return { type: "pi.event", eventType: eventType ?? "unknown" };
 }
 
-function summarizeToolArgs(args: unknown): string {
+function isAssistantContentDelta(assistantMessageEvent: unknown): boolean {
+  if (!isRecord(assistantMessageEvent)) return false;
+  return typeof assistantMessageEvent["contentIndex"] === "number" && assistantMessageEvent["partial"] !== undefined;
+}
+
+function summarizeToolArgs(args: unknown, toolName?: string): string {
+  if (toolName === "subagent") {
+    const subagentSummary = summarizeSubagentArgs(args);
+    if (subagentSummary !== undefined) return subagentSummary;
+  }
   if (!isRecord(args)) return stringifyPrimitive(args);
   const command = getString(args, "command");
   if (command !== undefined) return command;

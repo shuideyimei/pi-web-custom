@@ -557,7 +557,28 @@ describe("PiSessionService", () => {
 
     await service.prompt(sessionRef("prompt-session"), "Build the thing");
 
-    expect(fake.calls.prompt).toEqual([{ text: "Build the thing", options: undefined }]);
+    expect(fake.calls.prompt).toEqual([{ text: "Build the thing", options: { source: "rpc" } }]);
+    await service.dispose();
+  });
+
+  it("lists runtime commands from extensions, prompts, and skills", async () => {
+    const fake = fakeRuntime("commands-session", {
+      extensionRunner: { getRegisteredCommands: () => [{ invocationName: "btw", description: "Break the work down" }] },
+      promptTemplates: [{ name: "review", description: "Review changes" }],
+      resourceLoader: { getSkills: () => ({ skills: [{ name: "planner", description: "Plan work" }] }) },
+    });
+    const service = new PiSessionService(new CapturingSessionEventHub(), {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("commands-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await expect(service.commands(sessionRef("commands-session"))).resolves.toEqual(expect.arrayContaining([
+      { name: "btw", description: "Break the work down", source: "extension" },
+      { name: "review", description: "Review changes", source: "prompt" },
+      { name: "skill:planner", description: "Plan work", source: "skill" },
+    ]));
+
     await service.dispose();
   });
 
@@ -580,8 +601,8 @@ describe("PiSessionService", () => {
     await service.runCommand(sessionRef("echo-session"), "/skill:skill-creator");
     expect(hub.sessionEvents.filter(({ event }) => event.type === "message.append")).toHaveLength(1);
     expect(fake.calls.prompt).toEqual([
-      { text: "Build the thing", options: undefined },
-      { text: "/skill:skill-creator", options: undefined },
+      { text: "Build the thing", options: { source: "rpc" } },
+      { text: "/skill:skill-creator", options: { source: "rpc" } },
     ]);
 
     await service.dispose();
@@ -651,7 +672,7 @@ describe("PiSessionService", () => {
 
     await service.prompt(sessionRef("queued-session"), "Wait for the current turn", "followUp");
 
-    expect(fake.calls.prompt).toEqual([{ text: "Wait for the current turn", options: { streamingBehavior: "followUp" } }]);
+    expect(fake.calls.prompt).toEqual([{ text: "Wait for the current turn", options: { source: "rpc", streamingBehavior: "followUp" } }]);
     expect(hub.sessionEvents.some(({ event }) => event.type === "message.append")).toBe(false);
     await service.dispose();
   });
@@ -660,9 +681,9 @@ describe("PiSessionService", () => {
     const hub = new CapturingSessionEventHub();
     const fake = fakeRuntime("compacting-session", { isCompacting: true });
     let resolveFirstPrompt: (() => void) | undefined;
-    fake.session.prompt = (text: string, options?: { streamingBehavior?: "steer" | "followUp" }) => {
+    fake.session.prompt = (text: string, options?: { streamingBehavior?: "steer" | "followUp"; source?: "rpc" }) => {
       fake.calls.prompt.push({ text, options });
-      if (options === undefined) {
+      if (options?.streamingBehavior === undefined) {
         fake.session.isStreaming = true;
         return new Promise<void>((resolve) => { resolveFirstPrompt = resolve; });
       }
@@ -688,7 +709,7 @@ describe("PiSessionService", () => {
     fake.emit({ type: "compaction_end" });
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    expect(fake.calls.prompt).toEqual([{ text: "Start task 1", options: undefined }]);
+    expect(fake.calls.prompt).toEqual([{ text: "Start task 1", options: { source: "rpc" } }]);
     expect(hub.sessionEvents.some(({ event }) => event.type === "message.append" && JSON.stringify(event.message).includes("Start task 1"))).toBe(true);
     await expect(service.status(sessionRef("compacting-session"))).resolves.toMatchObject({
       pendingMessageCount: 1,
@@ -699,8 +720,8 @@ describe("PiSessionService", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     expect(fake.calls.prompt).toEqual([
-      { text: "Start task 1", options: undefined },
-      { text: "Then task 2", options: { streamingBehavior: "followUp" } },
+      { text: "Start task 1", options: { source: "rpc" } },
+      { text: "Then task 2", options: { source: "rpc", streamingBehavior: "followUp" } },
     ]);
     await expect(service.status(sessionRef("compacting-session"))).resolves.toMatchObject({
       pendingMessageCount: 0,
@@ -815,7 +836,7 @@ describe("PiSessionService", () => {
       const result = await service.spawnSession({ spawningCwd: "/workspace", prompt: "continue the plan", cwd: "/workspace-feature" });
 
       expect(result).toEqual({ sessionId: "spawned-1", cwd: "/workspace-feature" });
-      expect(fake.calls.prompt).toEqual([{ text: "continue the plan", options: undefined }]);
+      expect(fake.calls.prompt).toEqual([{ text: "continue the plan", options: { source: "rpc" } }]);
       expect(log).toEqual([{ details: { spawningCwd: "/workspace", sessionId: "spawned-1", cwd: "/workspace-feature", promptLength: 17 }, message: "spawn_session started a new session" }]);
       await service.dispose();
     });
@@ -893,7 +914,7 @@ describe("PiSessionService", () => {
       const result = await service.spawnSubsession({ spawningCwd: "/workspace", parentSessionId: "parent-1", parentSessionFile: "/tmp/parent-1.jsonl", prompt: "do the slice", cwd: "/workspace-feature" });
 
       expect(result).toEqual({ sessionId: "child-1", cwd: "/workspace-feature" });
-      expect(child.calls.prompt).toEqual([{ text: "do the slice", options: undefined }]);
+      expect(child.calls.prompt).toEqual([{ text: "do the slice", options: { source: "rpc" } }]);
       await expect(service.listSubsessions("parent-1")).resolves.toEqual([
         { sessionId: "child-1", cwd: "/workspace-feature", status: "idle" },
       ]);

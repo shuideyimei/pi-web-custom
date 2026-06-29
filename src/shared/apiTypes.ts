@@ -298,6 +298,17 @@ export interface WorkspaceActivityResponse {
   generatedAt: string;
 }
 
+export interface ExtensionOverlay {
+  requestId: string;
+  title: string;
+  body: string;
+  status: "working" | "ready";
+  closable: boolean;
+}
+
+export const EXTENSION_OVERLAY_CLOSE_VALUE = "__pi_web_extension_overlay_close__";
+export const EXTENSION_OVERLAY_KEY_PREFIX = "__pi_web_extension_overlay_key__:";
+
 export interface SlashCommand {
   name: string;
   description?: string;
@@ -567,6 +578,8 @@ export type SessionUiEvent =
   | { type: "status.update"; status: SessionStatus }
   | { type: "activity.update"; activity: SessionActivity }
   | { type: "command.output"; level: "info" | "success" | "error"; message: string }
+  | { type: "extension.overlay"; overlay: ExtensionOverlay }
+  | { type: "extension.overlay.close"; requestId: string }
   | { type: "session.error"; message: string }
   | { type: "session.name"; sessionId: string; name?: string }
   | { type: "session.created"; session: SessionInfo }

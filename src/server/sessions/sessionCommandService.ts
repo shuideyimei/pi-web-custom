@@ -12,9 +12,9 @@ export interface CommandSession {
   isBashRunning: boolean;
   isCompacting: boolean;
   pendingMessageCount: number;
-  promptTemplates: readonly { name: string }[];
-  extensionRunner: { getRegisteredCommands(): readonly { invocationName: string }[] };
-  resourceLoader: { getSkills(): { skills: readonly { name: string }[] } };
+  promptTemplates: readonly { name: string; description?: string }[];
+  extensionRunner: { getRegisteredCommands(): readonly { invocationName: string; description?: string }[] };
+  resourceLoader: { getSkills(): { skills: readonly { name: string; description?: string }[] } };
   sessionManager: { getLeafId(): string | null; getHeader?: () => { parentSession?: string } | null | undefined };
   setSessionName: (name: string) => void;
   compact: (instructions?: string) => Promise<{ summary: string; tokensBefore: number }>;
@@ -58,6 +58,12 @@ interface PendingCommandSelect {
   command: "fork";
 }
 
+export interface RuntimeCommand {
+  name: string;
+  description?: string;
+  source: "extension" | "prompt" | "skill";
+}
+
 export class SessionCommandService<TSession extends CommandSession = CommandSession> {
   private readonly pendingSelects = new Map<string, PendingCommandSelect>();
 
@@ -78,16 +84,14 @@ export class SessionCommandService<TSession extends CommandSession = CommandSess
     const [name = "", ...args] = text.trim().replace(/^\//, "").split(/\s+/);
     const rest = args.join(" ").trim();
 
+    const runtimeCommand = findRuntimeCommand(session, name);
+    if (runtimeCommand?.source === "extension") {
+      return this.forwardRuntimeCommand(sessionId, text, name);
+    }
+
     if (!isBuiltinCommand(name)) {
-      if (this.isRuntimeCommand(session, name)) {
-        // The command is forwarded to the agent, which expands it (e.g. /skill:*
-        // into a skill block) and streams the canonical message back. That is the
-        // authoritative feedback, so we don't synthesize an extra "Accepted" line
-        // that would only vanish on reload.
-        await this.prompt(sessionId, text);
-        return { type: "done" };
-      }
-      return { type: "unsupported", message: `Unknown command: /${name}` };
+      if (runtimeCommand !== undefined) return this.forwardRuntimeCommand(sessionId, text, name);
+      return { type: "unsupported", message: `/${name} is not available in this session` };
     }
 
     if (name === "session") return { type: "done", message: formatSessionStats(session) };
@@ -195,11 +199,66 @@ export class SessionCommandService<TSession extends CommandSession = CommandSess
     this.events.publishGlobal?.(event);
   }
 
-  private isRuntimeCommand(session: TSession, name: string): boolean {
-    return session.extensionRunner.getRegisteredCommands().some((command) => command.invocationName === name)
-      || session.promptTemplates.some((template) => template.name === name)
-      || session.resourceLoader.getSkills().skills.some((skill) => `skill:${skill.name}` === name);
+  private async forwardRuntimeCommand(sessionId: string, text: string, name: string): Promise<ClientCommandResult> {
+    // The command is forwarded to the agent, which executes registered extension
+    // commands, lets extension input handlers intercept command-like text, or
+    // expands resources (e.g. /skill:*). The runtime stream is the authoritative
+    // feedback, so we don't synthesize an extra "Accepted" line that would only
+    // vanish on reload.
+    await this.prompt(sessionId, text);
+    return { type: "done", message: `/${name} command sent` };
   }
+}
+
+export function listRuntimeCommands(session: CommandSession): RuntimeCommand[] {
+  return dedupeRuntimeCommands([
+    ...session.extensionRunner.getRegisteredCommands().flatMap((command) => runtimeCommand(command.invocationName, command.description, "extension")),
+    ...session.promptTemplates.flatMap((template) => runtimeCommand(template.name, template.description, "prompt")),
+    ...session.resourceLoader.getSkills().skills.flatMap((skill) => skillRuntimeCommand(skill.name, skill.description)),
+  ]);
+}
+
+function findRuntimeCommand(session: CommandSession, name: string): RuntimeCommand | undefined {
+  const normalizedName = normalizeRuntimeCommandName(name);
+  if (normalizedName === undefined) return undefined;
+  return listRuntimeCommands(session).find((command) => command.name === normalizedName);
+}
+
+function runtimeCommand(name: string, description: string | undefined, source: RuntimeCommand["source"]): RuntimeCommand[] {
+  const normalizedName = normalizeRuntimeCommandName(name);
+  if (normalizedName === undefined) return [];
+  const normalizedDescription = normalizeOptionalText(description);
+  return [{
+    name: normalizedName,
+    ...(normalizedDescription === undefined ? {} : { description: normalizedDescription }),
+    source,
+  }];
+}
+
+function skillRuntimeCommand(name: string, description: string | undefined): RuntimeCommand[] {
+  const normalizedName = normalizeRuntimeCommandName(name);
+  return normalizedName === undefined ? [] : runtimeCommand(`skill:${normalizedName}`, description, "skill");
+}
+
+function normalizeRuntimeCommandName(name: string): string | undefined {
+  const normalized = name.trim().replace(/^\/+/, "");
+  return normalized === "" || /\s/.test(normalized) ? undefined : normalized;
+}
+
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized === undefined || normalized === "" ? undefined : normalized;
+}
+
+function dedupeRuntimeCommands(commands: RuntimeCommand[]): RuntimeCommand[] {
+  const seen = new Set<string>();
+  const deduped: RuntimeCommand[] = [];
+  for (const command of commands) {
+    if (seen.has(command.name)) continue;
+    seen.add(command.name);
+    deduped.push(command);
+  }
+  return deduped;
 }
 
 function clientSessionFromRuntime(runtime: CommandRuntime): ClientSession {

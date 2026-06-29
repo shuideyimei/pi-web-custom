@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SessionUiEvent } from "../../shared/apiTypes.js";
-import { SessionCommandService, type CommandActiveSession, type CommandSession } from "./sessionCommandService.js";
+import { listRuntimeCommands, SessionCommandService, type CommandActiveSession, type CommandSession } from "./sessionCommandService.js";
 
 interface TestCommandSession extends CommandSession {
   sessionName: string | undefined;
@@ -54,18 +54,51 @@ function eventPublisher() {
 }
 
 describe("SessionCommandService", () => {
-  it("rejects unknown commands and forwards runtime commands as prompts", async () => {
+  it("forwards registered runtime slash commands and rejects unknown ones", async () => {
     const active = activeSession();
     const prompt = vi.fn(promptAccepted);
     const service = new SessionCommandService(() => getActive(active), prompt, eventPublisher());
 
-    await expect(service.run("s1", "/missing")).resolves.toEqual({ type: "unsupported", message: "Unknown command: /missing" });
-    // Forwarded runtime commands return a bare done result: the agent streams
+    await expect(service.run("s1", "/missing")).resolves.toEqual({ type: "unsupported", message: "/missing is not available in this session" });
+    // Forwarded commands return a bare done result: the agent streams
     // back the canonical expanded message, so no synthetic "Accepted" line.
-    await expect(service.run("s1", "/ext arg")).resolves.toEqual({ type: "done" });
-    await expect(service.run("s1", "/template arg")).resolves.toMatchObject({ type: "done" });
-    await expect(service.run("s1", "/skill:skill-a arg")).resolves.toMatchObject({ type: "done" });
+    await expect(service.run("s1", "/ext arg")).resolves.toEqual({ type: "done", message: "/ext command sent" });
+    await expect(service.run("s1", "/template arg")).resolves.toMatchObject({ type: "done", message: "/template command sent" });
+    await expect(service.run("s1", "/skill:skill-a arg")).resolves.toMatchObject({ type: "done", message: "/skill:skill-a command sent" });
     expect(prompt).toHaveBeenCalledTimes(3);
+  });
+
+  it("forwards extension commands before web builtin commands", async () => {
+    const active = activeSession({
+      extensionRunner: { getRegisteredCommands: () => [{ invocationName: "compact", description: "Extension compact" }] },
+    });
+    const prompt = vi.fn(promptAccepted);
+    const service = new SessionCommandService(() => getActive(active), prompt, eventPublisher());
+
+    await expect(service.run("s1", "/compact extension args")).resolves.toEqual({ type: "done", message: "/compact command sent" });
+    expect(prompt).toHaveBeenCalledWith("s1", "/compact extension args");
+    expect(active.runtime.session.compact).not.toHaveBeenCalled();
+  });
+
+  it("normalizes runtime command names for UI compatibility", () => {
+    const active = activeSession({
+      extensionRunner: {
+        getRegisteredCommands: () => [
+          { invocationName: "/btw", description: " Break the work down " },
+          { invocationName: "btw:2", description: "" },
+          { invocationName: "bad command", description: "invalid" },
+        ],
+      },
+      promptTemplates: [{ name: "btw", description: "Duplicate prompt" }, { name: "review" }],
+      resourceLoader: { getSkills: () => ({ skills: [{ name: "planner", description: "Plan work" }, { name: "", description: "invalid" }] }) },
+    });
+
+    expect(listRuntimeCommands(active.runtime.session)).toEqual([
+      { name: "btw", description: "Break the work down", source: "extension" },
+      { name: "btw:2", source: "extension" },
+      { name: "review", source: "prompt" },
+      { name: "skill:planner", description: "Plan work", source: "skill" },
+    ]);
   });
 
   it("renames sessions and returns updated client session metadata", async () => {

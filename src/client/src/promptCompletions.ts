@@ -2,6 +2,11 @@ export type PromptCompletionTrigger =
   | { kind: "command"; query: string; from: number; to: number }
   | { kind: "file"; query: string; from: number; to: number; fileScope?: "tracked" | "all" | undefined; allPrefix?: "@ " | "!@" | undefined; quoted?: boolean };
 
+export interface SlashCommandCompletionSource {
+  name: string;
+  source: "extension" | "prompt" | "skill" | "builtin";
+}
+
 export function detectPromptCompletionTrigger(draft: string, cursor = draft.length): PromptCompletionTrigger | undefined {
   const beforeCursor = draft.slice(0, cursor);
   const quotedTrigger = currentQuotedTrigger(beforeCursor, cursor);
@@ -14,7 +19,7 @@ export function detectPromptCompletionTrigger(draft: string, cursor = draft.leng
   const token = beforeCursor.slice(tokenStart);
   const beforeToken = beforeCursor.slice(0, tokenStart);
   if (beforeToken.endsWith("@ ")) return { kind: "file", query: token, from: tokenStart - 2, to: cursor, fileScope: "all", allPrefix: "@ " };
-  if (token.startsWith("/") && tokenStart === 0) return { kind: "command", query: token.slice(1), from: tokenStart, to: cursor };
+  if (token.startsWith("/") && beforeToken.trim() === "") return { kind: "command", query: token.slice(1), from: tokenStart, to: cursor };
   if (token.startsWith("!@")) return { kind: "file", query: token.slice(2), from: tokenStart, to: cursor, fileScope: "all", allPrefix: "!@" };
   if (token.startsWith("@")) return { kind: "file", query: token.slice(1), from: tokenStart, to: cursor, fileScope: "tracked" };
   return undefined;
@@ -24,6 +29,16 @@ export function fileCompletionInsertText(path: string, quoted: boolean, allPrefi
   const prefix = allPrefix ?? "@";
   if (!quoted && !path.includes(" ")) return `${prefix}${path}`;
   return `${prefix}"${path}"`;
+}
+
+export function matchingSlashCommands<TCommand extends SlashCommandCompletionSource>(commands: readonly TCommand[], query: string, limit = 12): TCommand[] {
+  const normalizedQuery = query.trim().replace(/^\/+/, "").toLowerCase();
+  return commands
+    .map((command) => ({ command, rank: slashCommandRank(command, normalizedQuery) }))
+    .filter(hasSlashCommandRank)
+    .sort((a, b) => compareSlashCommandMatches(a, b))
+    .slice(0, limit)
+    .map((entry) => entry.command);
 }
 
 function currentQuotedTrigger(beforeCursor: string, cursor: number): PromptCompletionTrigger | undefined {
@@ -59,4 +74,34 @@ function lastTokenBoundarySequence(text: string, sequence: string): number {
 
 function isWhitespace(value: string | undefined): boolean {
   return value === " " || value === "\t";
+}
+
+function slashCommandRank(command: SlashCommandCompletionSource, query: string): number | undefined {
+  const name = command.name.toLowerCase();
+  if (query === "") return 0;
+  if (name.startsWith(query)) return 0;
+  if (name.includes(query)) return 1;
+  return undefined;
+}
+
+function hasSlashCommandRank<TCommand extends SlashCommandCompletionSource>(
+  entry: { command: TCommand; rank: number | undefined },
+): entry is { command: TCommand; rank: number } {
+  return entry.rank !== undefined;
+}
+
+function compareSlashCommandMatches<TCommand extends SlashCommandCompletionSource>(
+  a: { command: TCommand; rank: number },
+  b: { command: TCommand; rank: number },
+): number {
+  return a.rank - b.rank
+    || sourceRank(a.command.source) - sourceRank(b.command.source)
+    || a.command.name.localeCompare(b.command.name);
+}
+
+function sourceRank(source: SlashCommandCompletionSource["source"]): number {
+  if (source === "extension") return 0;
+  if (source === "prompt") return 1;
+  if (source === "skill") return 2;
+  return 3;
 }

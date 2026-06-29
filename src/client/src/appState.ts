@@ -1,7 +1,8 @@
-import type { AuthProviderOption, CommandOption, CommandResult, FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Machine, MachineHealth, MachineRuntime, OAuthFlowState, PiWebStatusResponse, Project, SessionActivity, SessionInfo, SessionStatus, TerminalCommandRun, Workspace, WorkspaceActivity } from "./api";
+import type { AuthProviderOption, CommandOption, CommandResult, ExtensionOverlay, FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Machine, MachineHealth, MachineRuntime, OAuthFlowState, PiWebStatusResponse, Project, SessionActivity, SessionInfo, SessionStatus, TerminalCommandRun, Workspace, WorkspaceActivity } from "./api";
 import type { ChatLine } from "./components/shared";
 import type { QualifiedContributionId } from "./plugins/ids";
 import type { WorkspaceUploadBatchState } from "./workspaceUploadState";
+import type { ToastItem } from "./components/ToastContainer";
 
 export interface AppState {
   machines: Machine[];
@@ -36,6 +37,7 @@ export interface AppState {
   workspacesByProjectId: Record<string, Workspace[]>;
   workspaceDeletionRuns: Record<string, TerminalCommandRun>;
   commandDialog: Extract<CommandResult, { type: "select" }> | undefined;
+  extensionOverlay: ExtensionOverlay | undefined;
   modelDialog: { title: string; options: CommandOption[]; selectedValue?: string } | undefined;
   thinkingDialog: { title: string; options: CommandOption[]; selectedValue?: string } | undefined;
   themeDialog: { title: string; options: CommandOption[]; selectedValue?: string } | undefined;
@@ -61,6 +63,7 @@ export interface AppState {
   selectedTerminalId: string | undefined;
   piWebStatus: PiWebStatusResponse | undefined;
   error: string;
+  toasts: ToastItem[];
 }
 
 export type AuthDialogState =
@@ -136,6 +139,7 @@ export function initialAppState(): AppState {
     workspacesByProjectId: {},
     workspaceDeletionRuns: {},
     commandDialog: undefined,
+    extensionOverlay: undefined,
     modelDialog: undefined,
     thinkingDialog: undefined,
     themeDialog: undefined,
@@ -160,5 +164,6 @@ export function initialAppState(): AppState {
     selectedTerminalId: undefined,
     piWebStatus: undefined,
     error: "",
+    toasts: [],
   };
 }

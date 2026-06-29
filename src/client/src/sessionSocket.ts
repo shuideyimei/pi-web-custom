@@ -1,10 +1,9 @@
-import { realtimeEvents, realtimeEventStream, sessionEvents, sessionEventStream } from "./api";
+import { realtimeEventStream, sessionEventStream } from "./api";
 import type { GlobalSessionEvent, RealtimeEvent, SessionRef, SessionUiEvent } from "../../shared/apiTypes";
 
 export type { GlobalSessionEvent, RealtimeEvent, SessionUiEvent } from "../../shared/apiTypes";
 
 export class SessionSocket {
-  private socket: WebSocket | undefined;
   private source: EventSource | undefined;
   private session: SessionRef | undefined;
   private onEvent: ((event: SessionUiEvent) => void) | undefined;
@@ -39,9 +38,7 @@ export class SessionSocket {
     this.shouldReconnect = false;
     this.isReconnecting = false;
     window.clearTimeout(this.reconnectTimer);
-    closeSocketQuietly(this.socket);
     closeEventSourceQuietly(this.source);
-    this.socket = undefined;
     this.source = undefined;
     this.session = undefined;
     this.onEvent = undefined;
@@ -53,10 +50,6 @@ export class SessionSocket {
 
   private open(): void {
     if (this.session === undefined || this.session.id === "" || this.session.cwd === "" || !this.shouldReconnect) return;
-    if (typeof EventSource === "undefined") {
-      this.openWebSocket();
-      return;
-    }
     this.openEventSource();
   }
 
@@ -80,37 +73,6 @@ export class SessionSocket {
       // reconnecting so any late/buffered messages are held until the next open.
       this.isReconnecting = true;
     };
-  }
-
-  private openWebSocket(): void {
-    if (this.session === undefined) return;
-    const socket = sessionEvents(this.session, this.machineId);
-    this.socket = socket;
-    socket.onopen = () => {
-      this.reconnectDelay = 500;
-      if (this.hasOpened) {
-        // Reconnected - flush buffered events
-        this.flushEventBuffer();
-        this.onReconnect?.();
-      }
-      this.hasOpened = true;
-      this.isReconnecting = false;
-    };
-    socket.onmessage = (message) => void this.handleMessage(message.data);
-    socket.onerror = () => { socket.close(); };
-    socket.onclose = () => {
-      if (this.socket === socket) this.socket = undefined;
-      this.scheduleReconnect();
-    };
-  }
-
-  private scheduleReconnect(): void {
-    if (!this.shouldReconnect) return;
-    window.clearTimeout(this.reconnectTimer);
-    const delay = this.reconnectDelay;
-    this.reconnectDelay = Math.min(this.reconnectDelay * 1.6, 5000);
-    this.isReconnecting = true;
-    this.reconnectTimer = window.setTimeout(() => { this.open(); }, delay);
   }
 
   private flushEventBuffer(): void {
@@ -165,13 +127,13 @@ export class SessionSocket {
 }
 
 export class RealtimeSocket {
-  private socket: WebSocket | undefined;
   private source: EventSource | undefined;
   private onEvent: ((event: RealtimeEvent) => void) | undefined;
   private onOpen: (() => void) | undefined;
   private reconnectTimer?: number;
   private reconnectDelay = 500;
   private shouldReconnect = false;
+  private hasOpened = false;
   private machineId = "local";
 
   connect(onEvent: (event: RealtimeEvent) => void, onOpen?: () => void, machineId = "local"): void {
@@ -180,27 +142,23 @@ export class RealtimeSocket {
     this.onEvent = onEvent;
     this.onOpen = onOpen;
     this.shouldReconnect = true;
+    this.hasOpened = false;
     this.open();
   }
 
   close(): void {
     this.shouldReconnect = false;
     window.clearTimeout(this.reconnectTimer);
-    closeSocketQuietly(this.socket);
     closeEventSourceQuietly(this.source);
-    this.socket = undefined;
     this.source = undefined;
     this.onEvent = undefined;
     this.onOpen = undefined;
+    this.hasOpened = false;
     this.machineId = "local";
   }
 
   private open(): void {
     if (!this.shouldReconnect) return;
-    if (typeof EventSource === "undefined") {
-      this.openWebSocket();
-      return;
-    }
     this.openEventSource();
   }
 
@@ -209,36 +167,13 @@ export class RealtimeSocket {
     this.source = source;
     source.onopen = () => {
       this.reconnectDelay = 500;
+      this.hasOpened = true;
       this.onOpen?.();
     };
     source.onmessage = (message) => void this.handleMessage(message.data);
     source.onerror = () => {
-      // Native EventSource keeps retrying; websocket fallback below is only for
-      // browsers/environments without EventSource support.
+      // Native EventSource keeps retrying.
     };
-  }
-
-  private openWebSocket(): void {
-    const socket = realtimeEvents(this.machineId);
-    this.socket = socket;
-    socket.onopen = () => {
-      this.reconnectDelay = 500;
-      this.onOpen?.();
-    };
-    socket.onmessage = (message) => void this.handleMessage(message.data);
-    socket.onerror = () => { socket.close(); };
-    socket.onclose = () => {
-      if (this.socket === socket) this.socket = undefined;
-      this.scheduleReconnect();
-    };
-  }
-
-  private scheduleReconnect(): void {
-    if (!this.shouldReconnect) return;
-    window.clearTimeout(this.reconnectTimer);
-    const delay = this.reconnectDelay;
-    this.reconnectDelay = Math.min(this.reconnectDelay * 1.6, 5000);
-    this.reconnectTimer = window.setTimeout(() => { this.open(); }, delay);
   }
 
   private async handleMessage(data: MessageEvent["data"]): Promise<void> {
@@ -249,7 +184,7 @@ export class RealtimeSocket {
 
 function isSessionUiEvent(event: unknown): event is SessionUiEvent {
   const type = eventType(event);
-  return ["message.append", "assistant.delta", "assistant.thinking.delta", "tool.start", "tool.update", "tool.end", "shell.start", "shell.chunk", "shell.end", "agent.start", "agent.end", "message.end", "status.update", "activity.update", "command.output", "session.error", "session.name", "session.created", "pi.event"].includes(type);
+  return ["message.append", "assistant.delta", "assistant.thinking.delta", "tool.start", "tool.update", "tool.end", "shell.start", "shell.chunk", "shell.end", "agent.start", "agent.end", "message.end", "status.update", "activity.update", "command.output", "extension.overlay", "extension.overlay.close", "session.error", "session.name", "session.created", "pi.event"].includes(type);
 }
 
 function isGlobalSessionEvent(event: unknown): event is GlobalSessionEvent {
@@ -285,18 +220,6 @@ function isBatchEvent(event: unknown): event is { type: "batch"; events: unknown
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function closeSocketQuietly(socket: WebSocket | undefined): void {
-  if (socket === undefined) return;
-  socket.onmessage = null;
-  socket.onerror = null;
-  socket.onclose = null;
-  if (socket.readyState === WebSocket.CONNECTING) {
-    socket.onopen = () => { socket.close(); };
-    return;
-  }
-  socket.close();
 }
 
 function closeEventSourceQuietly(source: EventSource | undefined): void {
