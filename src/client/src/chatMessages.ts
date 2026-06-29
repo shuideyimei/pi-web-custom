@@ -1,3 +1,4 @@
+import { summarizeSubagentArgs } from "../../shared/subagentDisplay";
 import type { ChatLine, ChatPart, ToolExecutionPart, ToolPreview } from "./components/shared";
 
 export function normalizeMessages(messages: unknown[]): ChatLine[] {
@@ -193,7 +194,7 @@ function normalizeContent(content: unknown, message: unknown): ChatPart[] {
       const toolCallId = getString(part, "id");
       const skillRead = toolName === "read" ? parseSkillReadPath(getString(args, "path")) : undefined;
       if (skillRead !== undefined) return [{ type: "skillRead", ...skillRead, ...(toolCallId === undefined ? {} : { toolCallId }) }];
-      return [{ type: "toolCall", ...(toolCallId === undefined ? {} : { toolCallId }), toolName, summary: summarizeArgs(args), ...(args === undefined ? {} : { args }) }];
+      return [{ type: "toolCall", ...(toolCallId === undefined ? {} : { toolCallId }), toolName, summary: summarizeArgs(args, toolName), ...(args === undefined ? {} : { args }) }];
     }
     if (type === "image") {
       const data = getString(part, "data");
@@ -319,7 +320,11 @@ function objectFallback(value: unknown): ChatPart[] {
   return [{ type: "text", text: stringifyPrimitive(value) }];
 }
 
-export function summarizeArgs(args: unknown): string {
+export function summarizeArgs(args: unknown, toolName?: string): string {
+  if (toolName === "subagent") {
+    const subagentSummary = summarizeSubagentArgs(args);
+    if (subagentSummary !== undefined) return subagentSummary;
+  }
   if (!isRecord(args)) return stringifyPrimitive(args);
   const command = getString(args, "command");
   if (command !== undefined) return command;

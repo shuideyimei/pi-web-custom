@@ -2,12 +2,13 @@ import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { ChatLine, ChatPart } from "./shared";
 import "./FormattedText";
-import "./ToolCallCard";
+import "./ToolCallNode";
 import "./ToolCallGroup";
 import "./TaskTimeline";
 import "./ExecutionLog";
 import "./CollapsibleSection";
 import "./DiffViewer";
+import "./ThinkingNode";
 
 @customElement("message-bubble")
 export class MessageBubble extends LitElement {
@@ -62,12 +63,9 @@ export class MessageBubble extends LitElement {
     if (part.type === "text") {
       return html`<formatted-text class="part" .text=${part.text}></formatted-text>`;
     }
+    // Thinking content is NEVER shown — use compact shimmer node
     if (part.type === "thinking") {
-      return html`
-        <collapsible-section class="part" summary="Thinking" .borderless=${true}>
-          <formatted-text .text=${part.text}></formatted-text>
-        </collapsible-section>
-      `;
+      return html`<thinking-node class="part" .text=${part.text}></thinking-node>`;
     }
     if (part.type === "skillInvocation") {
       return html`
@@ -88,17 +86,21 @@ export class MessageBubble extends LitElement {
     if (part.type === "image") {
       return html`<img class="part chat-image" src=${`data:${part.mimeType};base64,${part.data}`} alt="attached image" loading="lazy" />`;
     }
+    // Compact tool call — single line, expandable
     if (part.type === "toolCall") {
-      return html`<div class="part tool-line">▶ ${part.toolName}<span class="summary">${part.summary}</span></div>`;
+      return html`<tool-call-node class="part" .aggregation=${{ toolCall: part }}></tool-call-node>`;
     }
     if (part.type === "toolExecution") {
-      return html`<tool-call-card class="part" .execution=${part}></tool-call-card>`;
+      return html`<tool-call-node class="part" .aggregation=${{ execution: part }}></tool-call-node>`;
     }
+    // Compact tool result — single status line
     if (part.type === "toolResult") {
       return html`
-        <collapsible-section class="part" summary=${`${part.isError ? "✖" : "✓"} ${part.toolName} result`} .open=${part.isError}>
-          <formatted-text .text=${part.text}></formatted-text>
-        </collapsible-section>
+        <div class="part tool-result-line ${part.isError ? "error" : "success"}">
+          <span class="tool-result-status">${part.isError ? "✖" : "✓"}</span>
+          <span class="tool-result-name">${part.toolName}</span>
+          <span class="tool-result-summary">${part.isError ? "failed" : "done"}</span>
+        </div>
       `;
     }
     return null;

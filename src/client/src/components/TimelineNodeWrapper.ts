@@ -26,15 +26,18 @@ export class TimelineNodeWrapper extends LitElement {
     :host { display: block; width: 100%; min-width: 0; }
 
     .tl-node {
-      display: block;
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
       position: relative;
       min-width: 0;
     }
 
     .tl-content {
+      flex: 1 1 auto;
       min-width: 0;
-      padding-top: 2px;
-      padding-bottom: 8px;
+      padding-top: 1px;
+      padding-bottom: 4px;
     }
   `;
 }

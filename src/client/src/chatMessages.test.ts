@@ -29,6 +29,12 @@ describe("chat message normalization", () => {
     ]);
   });
 
+  it("uses pi-subagents-aware summaries for subagent tool calls", () => {
+    expect(normalizeMessage({ role: "assistant", content: [{ type: "toolCall", name: "subagent", arguments: { tasks: [{ agent: "reviewer", count: 2 }, { agent: "oracle" }] } }] })).toEqual([
+      { role: "assistant", parts: [{ type: "toolCall", toolName: "subagent", summary: "parallel (3)", args: { tasks: [{ agent: "reviewer", count: 2 }, { agent: "oracle" }] } }] },
+    ]);
+  });
+
   it("normalizes image content into image parts", () => {
     expect(normalizeMessage({ role: "user", content: [{ type: "text", text: "see this" }, { type: "image", mimeType: "image/png", data: "QUJD" }] })).toEqual([
       { role: "user", parts: [{ type: "text", text: "see this" }, { type: "image", mimeType: "image/png", data: "QUJD" }] },

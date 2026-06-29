@@ -28,8 +28,7 @@ export class ToolCallCard extends LitElement {
     const previewMismatch = actualDiff !== undefined && preview?.diff !== undefined && actualDiff !== preview.diff;
     const errorText = execution.status === "error" ? execution.resultText : preview?.error;
     const bodyText = visibleDiff === undefined ? execution.resultText : undefined;
-    const isRunning = execution.status === "running" || execution.status === "pending";
-    const effectiveOpen = this.userToggled ? this.expanded : (isRunning || execution.status === "error");
+    const effectiveOpen = this.userToggled ? this.expanded : false;
 
     return html`
       <section class=${`tool-card ${execution.status}${effectiveOpen ? " expanded" : ""}`}>
@@ -44,7 +43,6 @@ export class ToolCallCard extends LitElement {
           <div class="tool-meta">
             ${editCountLabel(execution) === undefined ? null : html`<span class="edit-count">${editCountLabel(execution)}</span>`}
             ${diffStats === undefined ? null : html`<span class="diff-stats"><b class="added">+${diffStats.added}</b><span class="sep">/</span><b class="removed">-${diffStats.removed}</b></span>`}
-            <span class="status-label">${statusLabel(execution.status)}</span>
             <span class="chevron" aria-hidden="true">${effectiveOpen ? "▾" : "▸"}</span>
           </div>
         </div>
@@ -83,7 +81,7 @@ export class ToolCallCard extends LitElement {
     const truncated = lines.length > MAX_COLLAPSED_RESULT_LINES && !this.showFullResult;
     const visible = truncated ? lines.slice(0, MAX_COLLAPSED_RESULT_LINES).join("\n") : text;
     return html`
-      <details class="args-section" ?open=${execution.status === "error"}>
+      <details class="args-section">
         <summary>Parameters</summary>
         <pre class="args-text">${visible}${truncated
           ? html`<span class="truncation-hint"> ${String(lines.length - MAX_COLLAPSED_RESULT_LINES)} more lines</span>`
@@ -198,11 +196,25 @@ export class ToolCallCard extends LitElement {
     .tool-card.expanded { gap: 8px; padding-bottom: 9px; }
 
     /* ── Header ── */
-    .tool-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 8px 12px; cursor: pointer; user-select: none; transition: background .2s cubic-bezier(.4,0,.2,1); }
+    .tool-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; position: relative; overflow: hidden; padding: 8px 12px; cursor: pointer; user-select: none; transition: background .2s cubic-bezier(.4,0,.2,1), opacity .15s ease, filter .15s ease; }
     .tool-card.pending .tool-header,
-    .tool-card.running .tool-header { opacity: .55; filter: saturate(.75); }
+    .tool-card.running .tool-header { opacity: .72; filter: saturate(.9); }
+    .tool-card.pending .tool-header::after,
+    .tool-card.running .tool-header::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--pi-running, #8bb2ff) 14%, transparent) 48%, transparent 100%);
+      transform: translateX(-105%);
+      animation: tool-header-scan 1.45s ease-in-out infinite;
+    }
     .tool-card.success .tool-header,
     .tool-card.error .tool-header { opacity: 1; filter: none; }
+    @keyframes tool-header-scan {
+      0% { transform: translateX(-105%); }
+      100% { transform: translateX(105%); }
+    }
     .tool-header:hover { background: rgba(255,255,255,0.04); }
     .tool-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: -2px; border-radius: 6px; }
 
@@ -221,10 +233,6 @@ export class ToolCallCard extends LitElement {
     .removed, .diff .removed { color: color-mix(in srgb, var(--pi-danger) 50%, var(--pi-muted)); }
     .sep { opacity: .4; }
     .edit-count { color: var(--pi-dim); }
-    .status-label { text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
-    .tool-card.success .status-label { color: color-mix(in srgb, var(--pi-success) 45%, var(--pi-muted)); }
-    .tool-card.error .status-label { color: color-mix(in srgb, var(--pi-danger) 45%, var(--pi-muted)); }
-    .tool-card.running .status-label { color: color-mix(in srgb, var(--pi-running) 45%, var(--pi-muted)); }
     .chevron { font-size: 11px; opacity: .5; }
 
     /* ── Body (solid core, no backdrop-filter) ── */
@@ -314,13 +322,6 @@ function isAddedDiffLine(line: string): boolean {
 
 function isRemovedDiffLine(line: string): boolean {
   return line.startsWith("-") && !line.startsWith("---");
-}
-
-function statusLabel(status: ToolExecutionPart["status"]): string {
-  if (status === "success") return "done";
-  if (status === "error") return "failed";
-  if (status === "running") return "running";
-  return "pending";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

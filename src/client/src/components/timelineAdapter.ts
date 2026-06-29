@@ -14,6 +14,7 @@
  *  - The adapter is a pure function — no side effects, no DOM, no state.
  */
 
+import { stripAssistantEchoedPrompt, stripTuiFlavorText } from "../tuiFlavorText";
 import type { ChatLine, ChatPart, ToolExecutionPart } from "./shared";
 
 // ─── Status ───────────────────────────────────────────────────────────
@@ -31,9 +32,10 @@ export type TimelineNodeType =
   | "user"        // User prompt
   | "assistant"   // AI prose / markdown
   | "tool"        // Tool call (aggregated call + execution + result)
+  | "step"        // Codex-style step: thinking + tool calls grouped as one compact row
   | "error"       // System / error message
   | "bash"        // Shell output log
-  | "thinking"    // Thinking section
+  | "thinking"    // Thinking section (standalone, not part of a step)
   | "skill"       // Skill invocation / read
   | "meta";       // Low-key metadata line (event group summary)
 
@@ -56,10 +58,25 @@ export interface TimelineNode {
   parts: ChatPart[];
   /** Aggregated tool data (only set when type === "tool"). */
   tool?: ToolAggregation;
+  /** Step data: thinking part + aggregated tools (only set when type === "step"). */
+  step?: StepData;
   /** Original message metadata (timestamp, model). */
   meta?: ChatLine["meta"];
   /** Compaction / branch_summary marker. */
   source?: ChatLine["source"];
+}
+
+// ─── Step data (thinking + tool calls grouped) ────────────────────────
+
+export interface StepData {
+  /** The thinking part, if present. */
+  thinking: Extract<ChatPart, { type: "thinking" }> | undefined;
+  /** Text parts that appeared between thinking and tools (e.g. "Let me check those files"). */
+  textParts: Extract<ChatPart, { type: "text" }>[];
+  /** Aggregated tool calls within this step. */
+  tools: ToolAggregation[];
+  /** Bash outputs within this step. */
+  bashOutputs: string[];
 }
 
 // ─── Adapter ──────────────────────────────────────────────────────────
@@ -76,26 +93,61 @@ export function buildTimelineNodes(
 ): TimelineNode[] {
   const nodes: TimelineNode[] = [];
   let toolBuffer = new Map<string, ToolAggregation>();
-  let toolBufferIndex = 0;
+  let syntheticToolIndex = 0;
+  let stepThinking: Extract<ChatPart, { type: "thinking" }> | undefined;
+  let stepTools: ToolAggregation[] = [];
+  let stepBashOutputs: string[] = [];
+  let stepIndex = 0;
+  let latestUserPrompt: string | undefined;
 
-  const flushTools = () => {
+  const resetStep = () => {
+    stepThinking = undefined;
+    stepTools = [];
+    stepBashOutputs = [];
+  };
+
+  const hasOpenStep = () => stepThinking !== undefined || stepTools.length > 0 || stepBashOutputs.length > 0;
+
+  const makeStepNode = (
+    keyPrefix: string,
+    thinking: Extract<ChatPart, { type: "thinking" }> | undefined,
+    tools: ToolAggregation[],
+    bashOutputs: string[],
+    meta: ChatLine["meta"] | undefined,
+  ): TimelineNode => {
+    const parts: ChatPart[] = [];
+    if (thinking !== undefined) parts.push(thinking);
+    for (const agg of tools) {
+      if (agg.toolCall !== undefined) parts.push(agg.toolCall);
+      if (agg.execution !== undefined) parts.push(agg.execution);
+      if (agg.result !== undefined) parts.push(agg.result);
+    }
+    return {
+      type: "step",
+      status: stepStatus(thinking, tools, bashOutputs),
+      key: `${keyPrefix}:${String(stepIndex++)}`,
+      parts,
+      step: { thinking, textParts: [], tools, bashOutputs },
+      meta,
+    };
+  };
+
+  const flushOpenStep = (keyPrefix: string, meta: ChatLine["meta"] | undefined) => {
+    if (!hasOpenStep()) return;
+    nodes.push(makeStepNode(keyPrefix, stepThinking, stepTools, stepBashOutputs, meta));
+    resetStep();
+  };
+
+  const flushToolBuffer = (keyPrefix: string, meta: ChatLine["meta"] | undefined) => {
     if (toolBuffer.size === 0) return;
-    for (const [id, agg] of toolBuffer) {
-      nodes.push({
-        type: "tool",
-        status: toolAggregationStatus(agg),
-        key: `t:${String(offset)}:${String(toolBufferIndex)}:${id === "" ? "anon" : id}`,
-        parts: [
-          ...(agg.toolCall === undefined ? [] : [agg.toolCall]),
-          ...(agg.execution === undefined ? [] : [agg.execution]),
-          ...(agg.result === undefined ? [] : [agg.result]),
-        ],
-        tool: agg,
-      });
-      toolBufferIndex++;
+    const aggs = [...toolBuffer.values()];
+    if (stepThinking !== undefined || stepBashOutputs.length > 0 || stepTools.length > 0) {
+      stepTools.push(...aggs);
+    } else {
+      nodes.push(makeStepNode(keyPrefix, undefined, aggs, [], meta));
     }
     toolBuffer = new Map<string, ToolAggregation>();
-    toolBufferIndex = 0;
+    syntheticToolIndex = 0;
   };
 
   let lineIndex = 0;
@@ -104,9 +156,9 @@ export function buildTimelineNodes(
     const absIndexKey = String(absIndex);
     lineIndex++;
 
-    // Emit a meta node for compaction / branch_summary messages
     if (message.source === "compaction" || message.source === "branch_summary") {
-      flushTools();
+      flushToolBuffer(`tg:${absIndexKey}`, message.meta);
+      flushOpenStep(`step:${absIndexKey}`, message.meta);
       nodes.push({
         type: "meta",
         status: "idle",
@@ -118,52 +170,67 @@ export function buildTimelineNodes(
       continue;
     }
 
+    let partIndex = 0;
     for (const part of message.parts) {
+      const partKey = `${absIndexKey}:${String(partIndex++)}`;
       switch (part.type) {
         case "toolCall":
         case "toolExecution":
         case "toolResult": {
-          const id = part.toolCallId ?? `__no_id_${String(toolBufferIndex)}`;
+          const id = part.toolCallId ?? `__no_id_${String(syntheticToolIndex++)}`;
           const existing = toolBuffer.get(id) ?? {};
           if (part.type === "toolCall") existing.toolCall = part;
           if (part.type === "toolExecution") existing.execution = part;
           if (part.type === "toolResult") existing.result = part;
           toolBuffer.set(id, existing);
-          toolBufferIndex++;
+          break;
+        }
+
+        case "thinking": {
+          flushToolBuffer(`tg:${partKey}`, message.meta);
+          flushOpenStep(`step:${partKey}`, message.meta);
+          stepThinking = part;
           break;
         }
 
         case "text": {
-          flushTools();
+          flushToolBuffer(`tg:${partKey}`, message.meta);
           if (message.role === "user") {
-            nodes.push({ type: "user", status: "idle", key: `u:${absIndexKey}`, parts: [part], meta: message.meta });
+            flushOpenStep(`step:${partKey}`, message.meta);
+            latestUserPrompt = appendPromptText(latestUserPrompt, part.text);
+            nodes.push({ type: "user", status: "idle", key: `u:${partKey}`, parts: [part], meta: message.meta });
           } else if (message.role === "assistant") {
-            nodes.push({ type: "assistant", status: "idle", key: `a:${absIndexKey}`, parts: [part], meta: message.meta });
+            flushOpenStep(`step:${partKey}`, message.meta);
+            const assistantPart = sanitizeAssistantTextPart(part, latestUserPrompt);
+            if (assistantPart !== undefined) nodes.push({ type: "assistant", status: "idle", key: `a:${partKey}`, parts: [assistantPart], meta: message.meta });
           } else if (message.role === "bash") {
-            nodes.push({ type: "bash", status: "idle", key: `b:${absIndexKey}`, parts: [part], meta: message.meta });
+            if (hasOpenStep()) {
+              stepBashOutputs.push(part.text);
+            } else {
+              nodes.push(makeStepNode(`bash:${partKey}`, undefined, [], [part.text], message.meta));
+            }
           } else if (message.role === "system") {
-            nodes.push({ type: "error", status: "error", key: `s:${absIndexKey}`, parts: [part], meta: message.meta });
+            flushOpenStep(`step:${partKey}`, message.meta);
+            nodes.push({ type: "error", status: "error", key: `s:${partKey}`, parts: [part], meta: message.meta });
           } else {
-            // tool/skill role with text — render as assistant fallback
-            nodes.push({ type: "assistant", status: "idle", key: `x:${absIndexKey}`, parts: [part], meta: message.meta });
+            flushOpenStep(`step:${partKey}`, message.meta);
+            const assistantPart = sanitizeAssistantTextPart(part, latestUserPrompt);
+            if (assistantPart !== undefined) nodes.push({ type: "assistant", status: "idle", key: `x:${partKey}`, parts: [assistantPart], meta: message.meta });
           }
           break;
         }
 
-        case "thinking":
-          flushTools();
-          nodes.push({ type: "thinking", status: "idle", key: `th:${absIndexKey}`, parts: [part], meta: message.meta });
-          break;
-
         case "skillInvocation":
         case "skillRead":
-          flushTools();
-          nodes.push({ type: "skill", status: "idle", key: `sk:${absIndexKey}`, parts: [part], meta: message.meta });
+          flushToolBuffer(`tg:${partKey}`, message.meta);
+          flushOpenStep(`step:${partKey}`, message.meta);
+          nodes.push({ type: "skill", status: "idle", key: `sk:${partKey}`, parts: [part], meta: message.meta });
           break;
 
         case "image":
-          flushTools();
-          nodes.push({ type: "assistant", status: "idle", key: `img:${absIndexKey}`, parts: [part], meta: message.meta });
+          flushToolBuffer(`tg:${partKey}`, message.meta);
+          flushOpenStep(`step:${partKey}`, message.meta);
+          nodes.push({ type: "assistant", status: "idle", key: `img:${partKey}`, parts: [part], meta: message.meta });
           break;
 
         case "empty":
@@ -172,11 +239,63 @@ export function buildTimelineNodes(
     }
   }
 
-  flushTools();
-  return nodes;
+  flushToolBuffer(`tg:${String(offset + lineIndex)}`, undefined);
+  flushOpenStep(`step:${String(offset + lineIndex)}`, undefined);
+  return mergeAdjacentStepNodes(nodes);
+}
+
+function sanitizeAssistantTextPart(part: Extract<ChatPart, { type: "text" }>, userPrompt: string | undefined): Extract<ChatPart, { type: "text" }> | undefined {
+  const withoutFlavor = stripTuiFlavorText(part.text);
+  const text = stripAssistantEchoedPrompt(withoutFlavor, userPrompt);
+  if (text === "") return undefined;
+  return { ...part, text };
+}
+
+function appendPromptText(current: string | undefined, text: string): string {
+  if (current === undefined || current === "") return text;
+  return `${current}\n${text}`;
+}
+
+function mergeAdjacentStepNodes(nodes: TimelineNode[]): TimelineNode[] {
+  const merged: TimelineNode[] = [];
+  for (const node of nodes) {
+    const previous = merged[merged.length - 1];
+    if (previous?.type === "step" && previous.step !== undefined && node.type === "step" && node.step !== undefined) {
+      const thinking = previous.step.thinking ?? node.step.thinking;
+      const textParts = [...previous.step.textParts, ...node.step.textParts];
+      const tools = [...previous.step.tools, ...node.step.tools];
+      const bashOutputs = [...previous.step.bashOutputs, ...node.step.bashOutputs];
+      const parts = [...previous.parts, ...node.parts];
+      previous.parts = parts;
+      previous.status = stepStatus(thinking, tools, bashOutputs);
+      previous.step = { thinking, textParts, tools, bashOutputs };
+      continue;
+    }
+    merged.push(node);
+  }
+  return merged;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+
+function stepStatus(
+  thinking: Extract<ChatPart, { type: "thinking" }> | undefined,
+  tools: ToolAggregation[],
+  bashOutputs: readonly string[] = [],
+): TimelineNodeStatus {
+  // If we only have thinking/bash and no tools yet, we're running
+  if (tools.length === 0) return thinking !== undefined || bashOutputs.length > 0 ? "running" : "idle";
+  // If any tool is still running/pending, the step is running
+  for (const agg of tools) {
+    const s = toolAggregationStatus(agg);
+    if (s === "running" || s === "pending") return "running";
+  }
+  // If any tool errored, the step has errors
+  for (const agg of tools) {
+    if (toolAggregationStatus(agg) === "error") return "error";
+  }
+  return "success";
+}
 
 function toolAggregationStatus(agg: ToolAggregation): TimelineNodeStatus {
   if (agg.execution !== undefined) {

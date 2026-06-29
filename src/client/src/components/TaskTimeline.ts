@@ -94,6 +94,7 @@ export class TaskTimeline extends LitElement {
       if (name === "edit" || name === "write") return { label: "Modifying files", icon: "✏️" };
       if (name === "bash") return { label: "Executing", icon: "⚡" };
       if (name === "web_search" || name === "fetch_content") return { label: "Researching", icon: "🌐" };
+      if (name === "subagent") return { label: "Delegating", icon: "🤖" };
       if (name === "glob" || name === "grep" || name === "rg") return { label: "Searching", icon: "🔍" };
       return { label: `Running ${name}`, icon: "⚙" };
     }

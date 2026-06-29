@@ -1,19 +1,32 @@
 import { appendText, appendThinking, isModelResponseFailedLine, normalizeMessage, previewFromDetails, summarizeArgs, textMessage } from "./chatMessages";
-import type { ChatLine, ToolExecutionPart } from "./components/shared";
+import type { ChatLine, ChatPart, ToolExecutionPart } from "./components/shared";
 import { appendShellChunk, finalizeShellMessage, shellStartMessage } from "./shellMessages";
 import type { SessionUiEvent } from "./sessionSocket";
+import { stripAssistantEchoedPrompt, stripTuiFlavorText, stripTuiFlavorTextPreservingWhitespace } from "./tuiFlavorText";
 
 export function applyTranscriptEvent(messages: ChatLine[], event: SessionUiEvent): ChatLine[] | undefined {
   if (event.type === "message.append") return appendNewMessage(messages, event.message);
-  if (event.type === "assistant.delta") return appendText(clearStaleModelResponseFailed(messages, event.text), "assistant", event.text);
-  if (event.type === "assistant.thinking.delta") return appendThinking(clearStaleModelResponseFailed(messages, event.text), event.text);
+  if (event.type === "assistant.delta") {
+    const text = stripTuiFlavorTextPreservingWhitespace(event.text);
+    if (text === "") return messages;
+    return appendText(clearStaleModelResponseFailed(messages, text), "assistant", text);
+  }
+  if (event.type === "assistant.thinking.delta") {
+    const text = stripTuiFlavorText(event.text);
+    if (text === "") return messages;
+    return appendThinking(clearStaleModelResponseFailed(messages, text), text);
+  }
   if (event.type === "tool.start") return appendToolExecutionStart(messages, event);
   if (event.type === "tool.update") return updateToolExecution(messages, event.toolCallId, (part) => mergeToolExecutionUpdate(part, event));
   if (event.type === "tool.end") return finalizeToolExecution(messages, event.toolCallId, event.toolName, summarizeArgs(event.content), event.text, event.isError, event.content, event.details);
   if (event.type === "shell.start") return [...messages, shellStartMessage(event.command, event.excludeFromContext)];
   if (event.type === "shell.chunk") return appendShellChunk(messages, event.chunk);
   if (event.type === "shell.end") return finalizeShellMessage(messages, event);
-  if (event.type === "command.output") return [...messages, textMessage(event.level === "error" ? "system" : "tool", event.message)];
+  if (event.type === "command.output") {
+    const text = stripTuiFlavorText(event.message);
+    if (text === "") return messages;
+    return [...messages, textMessage(event.level === "error" ? "system" : "tool", text)];
+  }
   if (event.type === "session.error") return [...messages, textMessage("system", event.message)];
   if (event.type === "message.end") return event.message === undefined ? undefined : applyFinalMessage(messages, event.message);
   return undefined;
@@ -27,8 +40,9 @@ function applyFinalMessage(messages: ChatLine[], rawMessage: unknown): ChatLine[
 
   const ended = normalizeMessage(rawMessage);
   if (ended.length === 0) return undefined;
+  const lastUserText = latestUserText(messages);
   const displayEnded = ended
-    .map((line) => line.role === "assistant" ? withoutToolCalls(line) : line)
+    .map((line) => line.role === "assistant" ? withoutToolCalls(stripFlavorTextParts(line, lastUserText)) : stripFlavorTextParts(line))
     .filter((line) => line.parts.length > 0);
   if (displayEnded.length === 0) return messages;
   // When a successful assistant message arrives (e.g. after a retry),
@@ -51,6 +65,34 @@ function applyFinalLine(messages: ChatLine[], displayEnded: ChatLine): ChatLine[
 
 function withoutToolCalls(message: ChatLine): ChatLine {
   return { ...message, parts: message.parts.filter((part) => part.type !== "toolCall") };
+}
+
+function stripFlavorTextParts(message: ChatLine, userPrompt?: string): ChatLine {
+  const parts: ChatPart[] = [];
+  for (const part of message.parts) {
+    if (part.type !== "text" && part.type !== "thinking") {
+      parts.push(part);
+      continue;
+    }
+    const withoutFlavor = stripTuiFlavorText(part.text);
+    const text = part.type === "text" ? stripAssistantEchoedPrompt(withoutFlavor, userPrompt) : withoutFlavor;
+    if (text !== "") parts.push({ ...part, text });
+  }
+  return { ...message, parts };
+}
+
+function latestUserText(messages: readonly ChatLine[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message?.role !== "user") continue;
+    const text = message.parts
+      .filter((part): part is Extract<ChatLine["parts"][number], { type: "text" }> => part.type === "text")
+      .map((part) => part.text)
+      .join("\n")
+      .trim();
+    if (text !== "") return text;
+  }
+  return undefined;
 }
 
 function removeTrailingModelResponseFailed(messages: ChatLine[]): ChatLine[] {

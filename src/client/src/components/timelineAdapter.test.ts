@@ -80,7 +80,19 @@ describe("buildTimelineNodes", () => {
     assert.equal(nodeAt(nodes, 0).type, "assistant");
   });
 
-  it("aggregates toolCall + toolExecution + toolResult with same id into one tool node", () => {
+  it("strips TUI flavor lines and echoed user prompt before rendering assistant nodes", () => {
+    const messages = [
+      chatLine("user", [textPart("了解项目")]),
+      chatLine("assistant", [textPart("了解项目\n\nsegfault (core dumped emotionally)\n\n了解项目\n\n这是正式回答。")]),
+    ];
+    const nodes = buildTimelineNodes(messages);
+    assert.equal(nodes.length, 2);
+    const assistant = nodeAt(nodes, 1);
+    assert.equal(assistant.type, "assistant");
+    assert.deepEqual(assistant.parts, [textPart("这是正式回答。")]);
+  });
+
+  it("aggregates toolCall + toolExecution + toolResult with same id into one step node", () => {
     const messages = [
       chatLine("tool", [
         toolCallPart("read", "tc1"),
@@ -91,15 +103,19 @@ describe("buildTimelineNodes", () => {
     const nodes = buildTimelineNodes(messages);
     const node = nodeAt(nodes, 0);
     assert.equal(nodes.length, 1);
-    assert.equal(node.type, "tool");
+    assert.equal(node.type, "step");
     assert.equal(node.status, "success");
-    assert.isDefined(node.tool);
-    assert.isDefined(node.tool.toolCall);
-    assert.isDefined(node.tool.execution);
-    assert.isDefined(node.tool.result);
+    const step = node.step;
+    assert.isDefined(step);
+    assert.isAtLeast(step.tools.length, 1);
+    const agg = step.tools[0];
+    assert.isDefined(agg);
+    assert.isDefined(agg.toolCall);
+    assert.isDefined(agg.execution);
+    assert.isDefined(agg.result);
   });
 
-  it("separates tool calls with different ids into separate nodes", () => {
+  it("aggregates tool calls with different ids into a single step", () => {
     const messages = [
       chatLine("tool", [
         toolCallPart("read", "tc1"),
@@ -109,11 +125,12 @@ describe("buildTimelineNodes", () => {
       ]),
     ];
     const nodes = buildTimelineNodes(messages);
-    assert.equal(nodes.length, 2);
-    assert.equal(nodeAt(nodes, 0).type, "tool");
+    assert.equal(nodes.length, 1);
+    assert.equal(nodeAt(nodes, 0).type, "step");
     assert.equal(nodeAt(nodes, 0).status, "running");
-    assert.equal(nodeAt(nodes, 1).type, "tool");
-    assert.equal(nodeAt(nodes, 1).status, "pending");
+    const step = nodeAt(nodes, 0).step;
+    assert.isDefined(step);
+    assert.equal(step.tools.length, 2);
   });
 
   it("derives error status from toolResult.isError", () => {
@@ -126,6 +143,7 @@ describe("buildTimelineNodes", () => {
     ];
     const nodes = buildTimelineNodes(messages);
     assert.equal(nodes.length, 1);
+    assert.equal(nodeAt(nodes, 0).type, "step");
     assert.equal(nodeAt(nodes, 0).status, "error");
   });
 
@@ -138,14 +156,16 @@ describe("buildTimelineNodes", () => {
     ];
     const nodes = buildTimelineNodes(messages);
     assert.equal(nodes.length, 1);
+    assert.equal(nodeAt(nodes, 0).type, "step");
     assert.equal(nodeAt(nodes, 0).status, "error");
   });
 
-  it("converts a bash text message into a bash node", () => {
+  it("converts a bash text message into a compact step node", () => {
     const messages = [chatLine("bash", [textPart("output")])];
     const nodes = buildTimelineNodes(messages);
     assert.equal(nodes.length, 1);
-    assert.equal(nodeAt(nodes, 0).type, "bash");
+    assert.equal(nodeAt(nodes, 0).type, "step");
+    assert.equal(nodeAt(nodes, 0).step?.bashOutputs.length, 1);
   });
 
   it("converts a system text message into an error node", () => {
@@ -175,7 +195,7 @@ describe("buildTimelineNodes", () => {
     ];
     const nodes = buildTimelineNodes(messages);
     assert.isAtLeast(nodes.length, 1);
-    assert.isTrue(nodes.every((node) => node.type === "tool"));
+    assert.isTrue(nodes.every((node) => node.type === "step"));
   });
 
   it("preserves metadata (timestamp, model) on nodes", () => {
@@ -208,7 +228,7 @@ describe("buildTimelineNodes", () => {
     ];
     const nodes = buildTimelineNodes(messages);
     assert.equal(nodes.length, 2);
-    assert.equal(nodeAt(nodes, 0).type, "tool");
+    assert.equal(nodeAt(nodes, 0).type, "step");
     assert.equal(nodeAt(nodes, 1).type, "assistant");
   });
 });

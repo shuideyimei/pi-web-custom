@@ -386,7 +386,7 @@ export const chatStyles = css`
      ════════════════════════════════════════════════════════════════ */
   :host { position: relative; z-index: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; color: var(--pi-text); font: 14px system-ui, sans-serif; }
   .chat-wrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  .chat { height: 100%; min-height: 0; overflow: auto; overflow-anchor: none; scroll-behavior: smooth; padding: 26px 16px 28px; box-sizing: border-box; }
+  .chat { height: 100%; min-height: 0; overflow: auto; overflow-anchor: none; scroll-behavior: smooth; padding: 16px 16px 20px; box-sizing: border-box; }
   .scroll-marker { display: block; height: 0; overflow: hidden; pointer-events: none; }
 
   /* ── Activity dock ── */
@@ -398,10 +398,37 @@ export const chatStyles = css`
   .activity-dock.active .dot { animation: activity-breathe 2s ease-in-out infinite; opacity: 1; }
   .activity-dock.active .dot::after { animation: activity-glow 2s ease-in-out infinite; }
 
+  /* ── Activity shimmer sweep bar ── */
+  .activity-shimmer {
+    flex: 1 1 60px;
+    position: relative;
+    height: 2px;
+    min-width: 40px;
+    max-width: 120px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pi-border-muted) 20%, transparent);
+    overflow: hidden;
+  }
+  .activity-shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -40%;
+    width: 40%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--pi-accent) 40%, transparent), transparent);
+    animation: activity-shimmer-sweep 1.6s ease-in-out infinite;
+  }
+  @keyframes activity-shimmer-sweep {
+    0% { left: -40%; }
+    100% { left: 100%; }
+  }
+
   /* ── Document-flow messages (no bubble left/right) ── */
   .msg {
     max-width: 100%; min-width: 0; box-sizing: border-box;
-    margin: 0 0 0; padding: 20px 0 20px 0;
+    margin: 0 0 0; padding: 12px 0 12px 0;
     border: 0; border-radius: 0;
     background: transparent;
     overflow: visible;
@@ -446,7 +473,7 @@ export const chatStyles = css`
   /* ── Event group ── */
   .msg.event-group { padding: 0; border: 1px solid var(--pi-glass-border); border-radius: 12px; background: var(--pi-glass-bg); color: var(--pi-muted); backdrop-filter: var(--pi-glass-blur); -webkit-backdrop-filter: var(--pi-glass-blur); box-shadow: inset 0 1px 0 0 var(--pi-glass-highlight), 0 12px 40px -4px rgba(0,0,0,.4); }
   .msg.event-group.live { border-color: rgba(127, 209, 160, .25); }
-  .msg.event-group > summary { position: sticky; top: -26px; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 11px 11px 0 0; border-bottom: 1px solid var(--pi-border-muted); background: rgba(255,255,255,0.02); color: var(--pi-muted); }
+  .msg.event-group > summary { position: sticky; top: -16px; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 11px 11px 0 0; border-bottom: 1px solid var(--pi-border-muted); background: rgba(255,255,255,0.02); color: var(--pi-muted); }
   .msg.event-group.live > summary { border-bottom-color: rgba(127, 209, 160, .2); color: var(--pi-success); }
   .msg.event-group > summary .label { margin: 0; }
   .group-body { padding: 0 12px 12px; }
@@ -489,13 +516,13 @@ export const chatStyles = css`
 
   /* ── Message header ── */
   .msg-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 22px; margin-bottom: 8px; }
-  .msg > .msg-header { position: sticky; top: -26px; z-index: 4; margin: -20px -0px 8px -16px; padding: 7px 10px 6px 16px; border-radius: 0; border-bottom: 1px solid rgba(255,255,255,0.04); background: var(--pi-bg); backdrop-filter: var(--pi-glass-blur); -webkit-backdrop-filter: var(--pi-glass-blur); box-shadow: 0 8px 18px var(--pi-shadow-soft); }
+  .msg > .msg-header { position: sticky; top: -16px; z-index: 4; margin: -12px -0px 8px -16px; padding: 7px 10px 6px 16px; border-radius: 0; border-bottom: 1px solid rgba(255,255,255,0.04); background: var(--pi-bg); backdrop-filter: var(--pi-glass-blur); -webkit-backdrop-filter: var(--pi-glass-blur); box-shadow: 0 8px 18px var(--pi-shadow-soft); }
   .msg.user > .msg-header { border-bottom-color: rgba(139, 178, 255, .15); }
   .msg.assistant > .msg-header { border-bottom-color: rgba(255,255,255,0.04); background: var(--pi-bg); }
   .msg.tool > .msg-header { border-bottom-color: rgba(238, 178, 101, .15); }
   .msg.bash > .msg-header { border-bottom-color: rgba(127, 209, 160, .15); }
   .msg.skill > .msg-header { border-bottom-color: rgba(210, 168, 255, .15); }
-  .group-msg > .msg-header { position: sticky; top: -26px; z-index: 4; margin: -10px 0 8px; padding: 7px 0 6px; border-bottom: 1px solid rgba(255,255,255,0.04); background: var(--pi-bg); }
+  .group-msg > .msg-header { position: sticky; top: -16px; z-index: 4; margin: -10px 0 8px; padding: 7px 0 6px; border-bottom: 1px solid rgba(255,255,255,0.04); background: var(--pi-bg); }
   .msg-header-trailing { min-width: 0; display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 8px; }
   .msg-actions { display: inline-flex; gap: 6px; opacity: 0; transition: opacity .12s ease; }
   .msg-action { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--pi-glass-border); border-radius: 6px; background: var(--pi-glass-bg); color: var(--pi-muted); padding: 0; font: 14px system-ui, sans-serif; line-height: 1; cursor: pointer; transition: all .2s cubic-bezier(.4,0,.2,1); }
@@ -538,6 +565,31 @@ export const chatStyles = css`
   .tool-call-name { color: var(--pi-accent-ref); font-weight: 600; }
   .tool-call-name:hover { background: var(--pi-accent-ref-bg); border-radius: 2px; }
 
+  /* ── Compact tool result line ── */
+  .tool-result-line {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    padding: 1px 0;
+    font-size: 13px;
+  }
+  .tool-result-line.success .tool-result-status { color: color-mix(in srgb, var(--pi-success) 50%, var(--pi-muted)); }
+  .tool-result-line.error .tool-result-status { color: color-mix(in srgb, var(--pi-danger) 50%, var(--pi-muted)); }
+  .tool-result-name {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: var(--pi-dim);
+  }
+  .tool-result-summary {
+    margin-left: auto;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .tool-result-line.success .tool-result-summary { color: color-mix(in srgb, var(--pi-success) 45%, var(--pi-muted)); }
+  .tool-result-line.error .tool-result-summary { color: color-mix(in srgb, var(--pi-danger) 45%, var(--pi-muted)); }
+
   /* ── Misc ── */
   summary { cursor: pointer; color: var(--pi-muted); }
   pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; direction: ltr; text-align: left; unicode-bidi: isolate; }
@@ -550,7 +602,7 @@ export const chatStyles = css`
      ════════════════════════════════════════════════════════════════ */
 
   /* ── Node wrapper instance ── */
-  .tl-node-instance { display: block; width: 100%; min-width: 0; margin-bottom: 2px; }
+  .tl-node-instance { display: block; width: 100%; min-width: 0; margin-bottom: 0; }
 
   /* ── User node: right-aligned message bubble ── */
   .tl-user { min-width: 0; display: grid; justify-items: end; }
@@ -575,6 +627,26 @@ export const chatStyles = css`
   .tl-assistant { min-width: 0; }
   .tl-assistant-footer { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; }
   .tl-assistant formatted-text { color: var(--pi-text); line-height: 1.65; font-size: 14px; }
+
+  /* ── Completion summary (above final answer) ── */
+  .tl-completion-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 4px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--pi-border-muted) 50%, transparent);
+  }
+  .tl-completion-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--pi-success, #7fd1a0) 60%, var(--pi-muted));
+    letter-spacing: .02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   /* ── Role labels ── */
 

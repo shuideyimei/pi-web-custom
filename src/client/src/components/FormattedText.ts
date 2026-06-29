@@ -25,6 +25,9 @@ export class FormattedText extends LitElement {
   private stableElement: HTMLDivElement | undefined;
   private tailElement: HTMLDivElement | undefined;
   private scheduledUpdate = false;
+  private visibleStreamingText = "";
+  private typewriterFrame: number | undefined;
+  private lastTypewriterAt = 0;
   private readonly batchId = `formatted-${Math.random().toString(36).slice(2)}`;
 
   override render() {
@@ -39,7 +42,9 @@ export class FormattedText extends LitElement {
   }
 
   override firstUpdated(): void {
-    if (this.streaming) this.syncStreamingElements(true);
+    if (!this.streaming) return;
+    this.syncStreamingElements(true);
+    this.startTypewriter();
   }
 
   override updated(changed: Map<string, unknown>): void {
@@ -49,8 +54,18 @@ export class FormattedText extends LitElement {
       return;
     }
 
-    if (changed.has("streaming")) this.syncStreamingElements(true);
-    if (changed.has("text") || changed.has("streaming")) this.scheduleIncrementalUpdate();
+    if (changed.has("streaming")) {
+      this.syncStreamingElements(true);
+      if (!changed.has("text")) {
+        // Existing completed messages can briefly become the streaming node when
+        // a new prompt is sent. Show their current text immediately instead of
+        // replaying the whole answer with the typewriter.
+        this.visibleStreamingText = this.text;
+        this.scheduleIncrementalUpdate();
+        return;
+      }
+    }
+    if (changed.has("text") || changed.has("streaming")) this.startTypewriter();
   }
 
   override disconnectedCallback(): void {
@@ -63,8 +78,56 @@ export class FormattedText extends LitElement {
     this.tailElement = this.renderRoot.querySelector<HTMLDivElement>(".streaming-tail") ?? undefined;
     if (!reset) return;
     this.stableMarkdown = "";
+    this.visibleStreamingText = "";
+    this.cancelTypewriter();
     if (this.stableElement !== undefined) this.stableElement.innerHTML = "";
     if (this.tailElement !== undefined) this.tailElement.innerHTML = "";
+  }
+
+  private startTypewriter(): void {
+    if (!this.streaming) return;
+    if (this.typewriterFrame !== undefined) return;
+    this.lastTypewriterAt = performance.now();
+    this.typewriterFrame = window.requestAnimationFrame((now) => { this.advanceTypewriter(now); });
+  }
+
+  private advanceTypewriter(now: number): void {
+    this.typewriterFrame = undefined;
+    if (!this.streaming) return;
+
+    if (!this.text.startsWith(this.visibleStreamingText)) {
+      this.visibleStreamingText = "";
+      this.stableMarkdown = "";
+      if (this.stableElement !== undefined) this.stableElement.innerHTML = "";
+      if (this.tailElement !== undefined) this.tailElement.innerHTML = "";
+    }
+
+    const remaining = this.text.slice(this.visibleStreamingText.length);
+    if (remaining === "") return;
+
+    const elapsedFrames = Math.max(1, Math.round((now - this.lastTypewriterAt) / 16));
+    const count = Math.min(Array.from(remaining).length, this.typewriterCharsPerFrame(remaining.length) * elapsedFrames);
+    this.visibleStreamingText += Array.from(remaining).slice(0, count).join("");
+    this.lastTypewriterAt = now;
+    this.scheduleIncrementalUpdate();
+
+    if (this.visibleStreamingText.length < this.text.length) {
+      this.typewriterFrame = window.requestAnimationFrame((nextNow) => { this.advanceTypewriter(nextNow); });
+    }
+  }
+
+  private typewriterCharsPerFrame(backlog: number): number {
+    if (backlog > 800) return 32;
+    if (backlog > 300) return 18;
+    if (backlog > 120) return 10;
+    if (backlog > 40) return 5;
+    return 2;
+  }
+
+  private cancelTypewriter(): void {
+    if (this.typewriterFrame === undefined) return;
+    window.cancelAnimationFrame(this.typewriterFrame);
+    this.typewriterFrame = undefined;
   }
 
   private scheduleIncrementalUpdate(): void {
@@ -82,7 +145,7 @@ export class FormattedText extends LitElement {
     if (this.stableElement === undefined || this.tailElement === undefined) this.syncStreamingElements();
     if (this.stableElement === undefined || this.tailElement === undefined) return;
 
-    const { stable, tail } = splitStreamingMarkdown(this.text);
+    const { stable, tail } = splitStreamingMarkdown(this.visibleStreamingText);
     this.renderStableMarkdown(stable);
     this.renderTailMarkdown(tail);
     this.scrollIntoViewIfNeeded();
@@ -114,9 +177,11 @@ export class FormattedText extends LitElement {
   }
 
   private cleanupStreamingState(): void {
+    this.cancelTypewriter();
     this.stableElement = undefined;
     this.tailElement = undefined;
     this.stableMarkdown = "";
+    this.visibleStreamingText = "";
     this.scheduledUpdate = false;
   }
 

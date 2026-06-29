@@ -69,7 +69,7 @@ export class SessionController {
     // session must not cancel the in-flight upload indicator of the session
     // that is still sending; the per-session entry is cleared by send()'s
     // finally block when the request settles.
-    this.setState({ selectedSession: undefined, messages: [], messagePageStart: 0, messagePageEnd: 0, messagePageTotal: 0, isLoadingEarlierMessages: false, isReceivingPartialStream: false, status: undefined, activity: undefined, availableThinkingLevels: [] });
+    this.setState({ selectedSession: undefined, messages: [], messagePageStart: 0, messagePageEnd: 0, messagePageTotal: 0, isLoadingEarlierMessages: false, isReceivingPartialStream: false, status: undefined, activity: undefined, availableThinkingLevels: [], extensionOverlay: undefined });
   }
 
   deselectSession(options?: { forgetRememberedSelection?: boolean | undefined; updateUrl?: boolean | undefined }) {
@@ -123,6 +123,7 @@ export class SessionController {
       isReceivingPartialStream: false,
       status: session.archived === true ? undefined : this.getState().sessionStatuses[session.id],
       activity: session.archived === true ? undefined : this.getState().sessionActivities[session.id],
+      extensionOverlay: undefined,
     });
     try {
       if (session.archived === true) {
@@ -639,7 +640,9 @@ export class SessionController {
         this.finishStreamCatchup(this.catchupStreamSessionId);
         return;
       }
-      if (isTranscriptEvent(event)) return;
+      // Keep rendering live transcript events while catch-up is active; the
+      // final history refresh will reconcile the transient stream with stored
+      // messages once the turn ends.
     }
 
     if (isHighFrequencyTranscriptEvent(event)) {
@@ -651,12 +654,20 @@ export class SessionController {
     const transcript = this.transcripts.applyLiveEvent(this.getState().messages, event);
     if (transcript) {
       this.setState({ messages: transcript });
+      // Add toast notification for command.output events
+      if (event.type === "command.output") {
+        this.addToast(event.message, event.level);
+      }
     } else if (event.type === "status.update") {
       this.applyStatus(event.status);
     } else if (event.type === "activity.update") {
       this.applyActivity(event.activity);
     } else if (event.type === "session.name") {
       this.applySessionName(event.sessionId, event.name);
+    } else if (event.type === "extension.overlay") {
+      this.setState({ extensionOverlay: event.overlay });
+    } else if (event.type === "extension.overlay.close") {
+      if (this.getState().extensionOverlay?.requestId === event.requestId) this.setState({ extensionOverlay: undefined });
     }
   }
 
@@ -686,10 +697,10 @@ export class SessionController {
   }
 
   // Stream catch-up is a single mode with two coupled facets that must never
-  // drift: the private `catchupStreamSessionId` guard (which suppresses live
-  // transcript events while we lack the in-flight message prefix) and the
-  // public `isReceivingPartialStream` flag (which drives the "Catching up…"
-  // badge). Route every mutation of the mode through this helper so the guard
+  // drift: the private `catchupStreamSessionId` guard, which remembers which
+  // selected session still needs a history refresh, and the public
+  // `isReceivingPartialStream` flag (which drives the "Catching up…" badge).
+  // Route every mutation of the mode through this helper so the refresh guard
   // and the badge can never disagree. Catch-up only ever applies to the
   // selected session, so an active session id always implies the badge is on.
   private setStreamCatchup(sessionId: string | undefined): Pick<AppState, "isReceivingPartialStream"> {
@@ -716,6 +727,15 @@ export class SessionController {
     } catch (error) {
       if (this.getState().selectedSession?.id === sessionId) this.setState({ error: String(error) });
     }
+  }
+
+  private addToast(message: string, level: "info" | "success" | "error" = "info"): void {
+    const toast = { id: `toast-${String(Date.now())}-${String(Math.random())}`, message, level, timestamp: Date.now() };
+    this.setState({ toasts: [...this.getState().toasts, toast] });
+    // Auto-remove toast after 5 seconds
+    setTimeout(() => {
+      this.setState({ toasts: this.getState().toasts.filter((t) => t.id !== toast.id) });
+    }, 5000);
   }
 }
 
@@ -775,10 +795,6 @@ function sessionMessageCountPatch(state: AppState, sessionId: string, messageCou
   };
 }
 
-function isTranscriptEvent(event: SessionUiEvent): boolean {
-  return ["message.append", "assistant.delta", "assistant.thinking.delta", "tool.start", "tool.update", "tool.end", "shell.start", "shell.chunk", "shell.end", "command.output", "session.error"].includes(event.type);
-}
-
 function isHighFrequencyTranscriptEvent(event: SessionUiEvent): boolean {
   return event.type === "assistant.delta" || event.type === "assistant.thinking.delta" || event.type === "shell.chunk";
 }
@@ -786,4 +802,3 @@ function isHighFrequencyTranscriptEvent(event: SessionUiEvent): boolean {
 function isSessionNotFoundError(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("session not found");
 }
-

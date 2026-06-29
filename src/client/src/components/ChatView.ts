@@ -9,13 +9,15 @@ import type { SessionActivity, SessionStatus } from "../api";
 import type { ChatLine, ChatPart } from "./shared";
 import { chatStyles } from "./shared";
 import { renderRoleIcon, roleIconStyles } from "./roleIcons";
-import { buildTimelineNodes, type TimelineNode, type TimelineNodeStatus } from "./timelineAdapter";
+import { buildTimelineNodes, type TimelineNode, type TimelineNodeStatus, type ToolAggregation } from "./timelineAdapter";
 import "./ConversationMeter";
 import "./FormattedText";
 import "./ToolCallCard";
 import "./ToolCallGroup";
 import "./TaskTimeline";
-import "./ExecutionLog";
+import "./StepNode";
+import "./ThinkingNode";
+import "./BashNode";
 import "./DiffViewer";
 import "./CollapsibleSection";
 import "./ErrorPanel";
@@ -79,6 +81,8 @@ export class ChatView extends LitElement {
   private loadMoreCheckFrame: number | undefined;
   private scrollToBottomFrame: number | undefined;
   private conversationRailFrame: number | undefined;
+  private meterScrollResetFrame: number | undefined;
+  private draggingConversationMeter = false;
   private assistantFooterRevealTimer: number | undefined;
   private groupedMessagesInput?: ChatLine[];
   private groupedMessagesStart = 0;
@@ -86,6 +90,8 @@ export class ChatView extends LitElement {
   private readonly messageMetaCache = new WeakMap<ChatLine, { short: string; full: string }>();
   private readonly messageCopyTextCache = new WeakMap<ChatLine, string>();
   private partialStreamNoticeBody: string | undefined;
+  @state() private activityPhraseIndex = 0;
+  private activityPhraseTimer: number | undefined;
   private lastScrollTop = 0;
   private lastClientHeight = 0;
   private touchStartY: number | undefined;
@@ -121,7 +127,9 @@ export class ChatView extends LitElement {
     if (this.loadMoreCheckFrame !== undefined) cancelAnimationFrame(this.loadMoreCheckFrame);
     if (this.scrollToBottomFrame !== undefined) cancelAnimationFrame(this.scrollToBottomFrame);
     if (this.conversationRailFrame !== undefined) cancelAnimationFrame(this.conversationRailFrame);
+    if (this.meterScrollResetFrame !== undefined) cancelAnimationFrame(this.meterScrollResetFrame);
     this.clearAssistantFooterRevealTimer();
+    this.stopActivityPhraseCycle();
     window.removeEventListener("resize", this.onViewportResize);
     window.removeEventListener("pagehide", this.onPageHide);
     window.visualViewport?.removeEventListener("resize", this.onViewportResize);
@@ -173,6 +181,15 @@ export class ChatView extends LitElement {
     if (changed.has("messages") || changed.has("messageStart") || changed.has("hasMore") || changed.has("loadingMore")) this.continuePendingScrollRestore();
     if (changed.has("messages") || changed.has("hasMore") || changed.has("loadingMore")) this.requestLoadMoreIfNeeded();
     if (this.assistantFooterRevealInputsChanged(changed)) this.scheduleAssistantFooterReveal();
+    // Manage activity phrase cycling
+    if (changed.has("status") || changed.has("activity") || changed.has("isSendingPrompt")) {
+      const state = this.activityState();
+      if (state !== undefined && state !== "idle") {
+        this.startActivityPhraseCycle(state);
+      } else {
+        this.stopActivityPhraseCycle();
+      }
+    }
   }
 
   override render() {
@@ -185,7 +202,11 @@ export class ChatView extends LitElement {
         <div class="chat" @scroll=${() => { this.onScroll(); }} @wheel=${(event: WheelEvent) => { this.onWheel(event); }} @touchstart=${(event: TouchEvent) => { this.onTouchStart(event); }} @touchmove=${(event: TouchEvent) => { this.onTouchMove(event); }}>
           ${this.renderHistoryBoundary()}
           <timeline-layout>
-            ${nodes.map((node, index) => this.renderTimelineNode(node, index, node.key === assistantFooterKey, node.key === streamingNodeKey))}
+            ${nodes.map((node, index) => {
+              const isStreamingNode = node.key === streamingNodeKey;
+              if (!this.shouldRenderTimelineNode(node, isStreamingNode)) return null;
+              return this.renderTimelineNode(node, index, node.key === assistantFooterKey, isStreamingNode, undefined, this.stepSummaryReady(nodes, index));
+            })}
           </timeline-layout>
           ${this.renderQueuedMessages()}
           ${this.renderSessionActivity()}
@@ -264,6 +285,16 @@ export class ChatView extends LitElement {
     return this.isReceivingPartialStream || this.isCompacting || this.isSessionLive();
   }
 
+  private activityPhraseState(): string | undefined {
+    const state = this.activityState();
+    if (state === undefined || state === "idle") return undefined;
+    if (this.activity !== undefined && (state === "idle" || this.activity.phase !== "idle")) {
+      // Use activity label-based phrases when available
+      return undefined;
+    }
+    return state;
+  }
+
   /**
    * Return the key of the single node that should render in streaming mode.
    * Only the last assistant or thinking node gets streaming — all earlier
@@ -273,12 +304,43 @@ export class ChatView extends LitElement {
     if (!this.isSessionLive()) return undefined;
     for (let index = nodes.length - 1; index >= 0; index--) {
       const node = nodes[index];
-      if (node?.type === "assistant" || node?.type === "thinking") return node.key;
+      if (node?.type === "assistant" || node?.type === "thinking" || node?.type === "step") return node.key;
     }
     return undefined;
   }
 
-  private renderTimelineNode(node: TimelineNode, displayIndex: number, showAssistantFooter: boolean, isStreamingNode: boolean) {
+  private shouldRenderTimelineNode(node: TimelineNode, isStreamingNode: boolean): boolean {
+    if (node.type !== "step") return true;
+    const step = node.step;
+    if (step === undefined) return false;
+
+    const isRunning = step.tools.some((agg) => this.stepToolStatus(agg) === "running" || this.stepToolStatus(agg) === "pending");
+    const hasThinking = step.thinking !== undefined;
+    const isCompleteNoTools = !isRunning && step.tools.length === 0 && hasThinking;
+    if (isCompleteNoTools && !isStreamingNode) return false;
+
+    return true;
+  }
+
+  private stepToolStatus(agg: ToolAggregation): "idle" | "pending" | "running" | "success" | "error" {
+    if (agg.execution !== undefined) return agg.execution.status;
+    if (agg.result !== undefined) return agg.result.isError ? "error" : "success";
+    if (agg.toolCall !== undefined) return "pending";
+    return "idle";
+  }
+
+  private stepSummaryReady(nodes: readonly TimelineNode[], index: number): boolean {
+    const node = nodes[index];
+    if (node?.type !== "step") return true;
+    for (let nextIndex = index + 1; nextIndex < nodes.length; nextIndex++) {
+      const next = nodes[nextIndex];
+      if (next?.type === "assistant" && next.parts.some((part) => part.type === "text" && part.text !== "")) return true;
+      if (next?.type === "user") return true;
+    }
+    return false;
+  }
+
+  private renderTimelineNode(node: TimelineNode, displayIndex: number, showAssistantFooter: boolean, isStreamingNode: boolean, completionSummary: string | undefined, stepSummaryReady: boolean) {
     const isLive = this.isSessionLive();
     const nodeStatus: TimelineNodeStatus = node.status;
     return html`
@@ -290,19 +352,21 @@ export class ChatView extends LitElement {
         data-index=${String(displayIndex)}
         data-scroll-anchor-id=${node.key}
       >
-        ${this.renderTimelineNodeContent(node, showAssistantFooter, isStreamingNode)}
+        ${this.renderTimelineNodeContent(node, showAssistantFooter, isStreamingNode, completionSummary, stepSummaryReady)}
       </timeline-node-wrapper>
     `;
   }
 
-  private renderTimelineNodeContent(node: TimelineNode, showAssistantFooter: boolean, isStreamingNode: boolean) {
+  private renderTimelineNodeContent(node: TimelineNode, showAssistantFooter: boolean, isStreamingNode: boolean, completionSummary: string | undefined, stepSummaryReady: boolean) {
     switch (node.type) {
       case "user":
         return this.renderUserNode(node);
       case "assistant":
-        return this.renderAssistantNode(node, showAssistantFooter, isStreamingNode);
+        return this.renderAssistantNode(node, showAssistantFooter, isStreamingNode, completionSummary);
       case "tool":
         return this.renderToolNode(node);
+      case "step":
+        return this.renderStepNode(node, isStreamingNode, stepSummaryReady);
       case "error":
         return this.renderErrorNode(node);
       case "bash":
@@ -336,12 +400,13 @@ export class ChatView extends LitElement {
     `;
   }
 
-  private renderAssistantNode(node: TimelineNode, showFooter: boolean, streaming: boolean) {
+  private renderAssistantNode(node: TimelineNode, showFooter: boolean, streaming: boolean, completionSummary: string | undefined) {
     const textPart = node.parts.find((p): p is Extract<ChatPart, { type: "text" }> => p.type === "text");
     const meta = this.nodeMetaLabel(node);
     const key = node.key;
     return html`
       <div class="tl-assistant">
+        ${completionSummary !== undefined ? html`<div class="tl-completion-summary"><span class="tl-completion-text">${completionSummary}</span></div>` : null}
         ${textPart ? html`<formatted-text .text=${textPart.text} .streaming=${streaming}></formatted-text>` : null}
         ${this.renderNodeImages(node)}
         ${showFooter ? html`
@@ -354,6 +419,47 @@ export class ChatView extends LitElement {
         ` : null}
       </div>
     `;
+  }
+
+  private computeCompletionSummary(nodes: readonly TimelineNode[]): string | undefined {
+    const toolCounts = new Map<string, number>();
+    let hasSteps = false;
+    for (const node of nodes) {
+      if (node.type === "step" && node.step !== undefined) {
+        hasSteps = true;
+        for (const agg of node.step.tools) {
+          const name = agg.execution?.toolName ?? agg.toolCall?.toolName ?? agg.result?.toolName ?? "tool";
+          toolCounts.set(name, (toolCounts.get(name) ?? 0) + 1);
+        }
+      } else if (node.type === "tool" && node.tool !== undefined) {
+        hasSteps = true;
+        const name = node.tool.execution?.toolName ?? node.tool.toolCall?.toolName ?? node.tool.result?.toolName ?? "tool";
+        toolCounts.set(name, (toolCounts.get(name) ?? 0) + 1);
+      }
+    }
+    if (!hasSteps || toolCounts.size === 0) return undefined;
+
+    const parts: string[] = ["Completed"];
+
+    const readCount = toolCounts.get("read") ?? 0;
+    if (readCount > 0) parts.push(`Read ${String(readCount)} file${readCount === 1 ? "" : "s"}`);
+
+    const editCount = (toolCounts.get("edit") ?? 0) + (toolCounts.get("write") ?? 0);
+    if (editCount > 0) parts.push(`Edited ${String(editCount)} file${editCount === 1 ? "" : "s"}`);
+
+    const bashCount = toolCounts.get("bash") ?? 0;
+    if (bashCount > 0) parts.push(`Ran ${String(bashCount)} command${bashCount === 1 ? "" : "s"}`);
+
+    const searchCount = (toolCounts.get("web_search") ?? 0) + (toolCounts.get("fetch_content") ?? 0);
+    if (searchCount > 0) parts.push(`Searched ${String(searchCount)} site${searchCount === 1 ? "" : "s"}`);
+
+    const known = new Set(["read", "edit", "write", "bash", "web_search", "fetch_content", "glob", "grep"]);
+    const otherCount = [...toolCounts.entries()]
+      .filter(([name]) => !known.has(name))
+      .reduce((sum, [, count]) => sum + count, 0);
+    if (otherCount > 0) parts.push(`${String(otherCount)} other`);
+
+    return parts.join(" · ");
   }
 
   private renderCopyAction(node: TimelineNode, key: string) {
@@ -401,17 +507,19 @@ export class ChatView extends LitElement {
   private renderBashNode(node: TimelineNode) {
     const textPart = node.parts.find((p): p is Extract<ChatPart, { type: "text" }> => p.type === "text");
     if (!textPart) return null;
-    return html`<execution-log .stdout=${textPart.text}></execution-log>`;
+    return html`<bash-node .stdout=${textPart.text}></bash-node>`;
   }
 
   private renderThinkingNode(node: TimelineNode, streaming: boolean) {
     const part = node.parts.find((p): p is Extract<ChatPart, { type: "thinking" }> => p.type === "thinking");
     if (!part) return null;
-    return html`
-      <collapsible-section summary="Thinking" .borderless=${true}>
-        <formatted-text .text=${part.text} .streaming=${streaming}></formatted-text>
-      </collapsible-section>
-    `;
+    return html`<thinking-node .text=${part.text} .streaming=${streaming}></thinking-node>`;
+  }
+
+  private renderStepNode(node: TimelineNode, streaming: boolean, summaryReady: boolean) {
+    const step = node.step;
+    if (!step) return null;
+    return html`<step-node .step=${step} .streaming=${streaming} .summaryReady=${summaryReady}></step-node>`;
   }
 
   private renderSkillNode(node: TimelineNode) {
@@ -494,23 +602,7 @@ export class ChatView extends LitElement {
   }
 
   private renderActivityDock() {
-    if (this.isSendingPrompt) {
-      return html`
-        <div class="activity-dock active" aria-live="polite">
-          <span class="dot"></span>
-          <span class="activity-text">Sending your message…</span>
-        </div>
-      `;
-    }
-    const state = this.activityState();
-    if (state === undefined) return null;
-    const active = state !== "idle" || this.activity?.phase === "active";
-    return html`
-      <div class=${active ? "activity-dock active" : "activity-dock"} aria-live="polite">
-        <span class="dot"></span>
-        <span class="activity-text">${this.activityText(state)}</span>
-      </div>
-    `;
+    return null;
   }
 
   private renderQueuedMessages() {
@@ -533,20 +625,7 @@ export class ChatView extends LitElement {
   }
 
   private renderSessionActivity() {
-    if (this.isReceivingPartialStream) return html`
-      <aside class="session-activity receiving" aria-live="polite">
-        <strong>Catching up…</strong>
-        <span>${this.currentPartialStreamNoticeBody()}</span>
-      </aside>
-    `;
-    if (!this.isCompacting) return null;
-    return html`
-      <aside class="session-activity compacting" aria-live="polite">
-        <strong><span class="compacting-spinner"></span> Compacting history…</strong>
-        <span>The agent is summarizing earlier context. New prompts will be queued until compaction finishes.</span>
-        ${this.pendingMessageCount > 0 ? html`<small>${this.pendingMessageCount} queued ${this.pendingMessageCount === 1 ? "message" : "messages"}</small>` : null}
-      </aside>
-    `;
+    return null;
   }
 
   private syncPartialStreamNoticeBody(): void {
@@ -568,10 +647,46 @@ export class ChatView extends LitElement {
     return "idle";
   }
 
+  private readonly activityPhrases: Record<string, string[]> = {
+    running: ["Thinking…", "Analyzing request…", "Inspecting project…", "Reasoning…", "Planning…"],
+    bash: ["Running command…", "Executing…", "Waiting for output…"],
+    compacting: ["Compacting history…", "Summarizing…", "Organizing context…"],
+    queued: ["Queued…", "Waiting…", "Pending…"],
+  };
+
+  private startActivityPhraseCycle(state: string): void {
+    this.stopActivityPhraseCycle();
+    const phrases = this.activityPhrases[state];
+    if (phrases === undefined || phrases.length < 2) return;
+    this.activityPhraseTimer = window.setInterval(() => {
+      this.activityPhraseIndex = (this.activityPhraseIndex + 1) % phrases.length;
+    }, 3500);
+  }
+
+  private stopActivityPhraseCycle(): void {
+    if (this.activityPhraseTimer !== undefined) {
+      window.clearInterval(this.activityPhraseTimer);
+      this.activityPhraseTimer = undefined;
+    }
+    this.activityPhraseIndex = 0;
+  }
+
   private activityText(state: string): string {
     const activity = this.activity;
-    if (activity === undefined) return state;
-    if (state !== "idle" && activity.phase === "idle") return state;
+    if (activity === undefined) {
+      const phrases = this.activityPhrases[state];
+      if (phrases !== undefined) {
+        return phrases[this.activityPhraseIndex % phrases.length] ?? phrases[0] ?? state;
+      }
+      return state;
+    }
+    if (state !== "idle" && activity.phase === "idle") {
+      const phrases = this.activityPhrases[state];
+      if (phrases !== undefined) {
+        return phrases[this.activityPhraseIndex % phrases.length] ?? phrases[0] ?? state;
+      }
+      return state;
+    }
     return activity.detail !== undefined && activity.detail !== "" ? `${activity.label}: ${activity.detail}` : activity.label;
   }
 
@@ -580,7 +695,7 @@ export class ChatView extends LitElement {
     const total = this.conversationDisplayTotal();
     const position = this.conversationPositionPercent(total);
     const loadedPercent = this.hasMore ? clampPercent((this.messages.length / total) * 100) : 100;
-    return html`<conversation-meter .positionPercent=${position} .loadedPercent=${loadedPercent}></conversation-meter>`;
+    return html`<conversation-meter .positionPercent=${position} .loadedPercent=${loadedPercent} @conversation-meter-seek=${this.onConversationMeterSeek}></conversation-meter>`;
   }
 
   private conversationDisplayTotal(): number {
@@ -780,7 +895,8 @@ export class ChatView extends LitElement {
   private renderPart(part: ChatPart, message?: ChatLine) {
     if (part.type === "text" && message?.role === "bash") return html`<execution-log class="part" .stdout=${part.text}></execution-log>`;
     if (part.type === "text") return html`<formatted-text class="part" .text=${part.text}></formatted-text>`;
-    if (part.type === "thinking") return html`<collapsible-section class="part" summary="Thinking" .borderless=${true}><formatted-text .text=${part.text}></formatted-text></collapsible-section>`;
+    // Thinking content is NEVER shown — use compact shimmer node instead
+    if (part.type === "thinking") return html`<thinking-node class="part" .text=${part.text} .streaming=${this.isSessionLive()}></thinking-node>`;
     if (part.type === "skillInvocation") return html`
       <collapsible-section class="part" summary=${`[skill] ${part.name}`}>
         <small>${part.location}</small>
@@ -794,12 +910,16 @@ export class ChatView extends LitElement {
       </div>
     `;
     if (part.type === "image") return html`<img class="part chat-image" src=${`data:${part.mimeType};base64,${part.data}`} alt="attached image" loading="lazy" />`;
-    if (part.type === "toolCall") return html`<div class="part tool-line"><span class="tool-arrow">▶</span> <span class="tool-call-name">${part.toolName}</span><span class="summary">${part.summary}</span></div>`;
-    if (part.type === "toolExecution") return html`<tool-call-card class="part" .execution=${part}></tool-call-card>`;
+    // Compact tool call — single line, expandable
+    if (part.type === "toolCall") return html`<tool-call-node class="part" .aggregation=${{ toolCall: part }}></tool-call-node>`;
+    if (part.type === "toolExecution") return html`<tool-call-node class="part" .aggregation=${{ execution: part }}></tool-call-node>`;
+    // Compact tool result — single status line
     if (part.type === "toolResult") return html`
-      <collapsible-section class="part" summary=${`${part.isError ? "✖" : "✓"} ${part.toolName} result`} .open=${part.isError}>
-        <formatted-text .text=${part.text}></formatted-text>
-      </collapsible-section>
+      <div class="part tool-result-line ${part.isError ? "error" : "success"}">
+        <span class="tool-result-status">${part.isError ? "✖" : "✓"}</span>
+        <span class="tool-result-name">${part.toolName}</span>
+        <span class="tool-result-summary">${part.isError ? "failed" : "done"}</span>
+      </div>
     `;
     return null;
   }
@@ -922,8 +1042,16 @@ export class ChatView extends LitElement {
     this.restoreScrollFrame = requestAnimationFrame(() => {
       this.restoreScrollFrame = undefined;
       if (this.sessionId !== sessionId) return;
-      this.scrollToBottom(true, true);
+      this.withSuppressedScrollSave(() => {
+        const result = this.scrollController.restorePosition(sessionId, this.chat, this.scrollAnchorElements(), { fallbackToBottom: this.shouldFallbackToBottomForMissingAnchor() });
+        this.handleScrollRestoreResult(sessionId, result);
+      });
     });
+  }
+
+  scrollToLatest(smooth = true): void {
+    this.pinnedToBottom = true;
+    this.scrollToBottom(smooth, true);
   }
 
   private continuePendingScrollRestore(): void {
@@ -1032,6 +1160,7 @@ export class ChatView extends LitElement {
   }
 
   private scheduleConversationRailUpdate(): void {
+    if (this.draggingConversationMeter) return;
     if (this.conversationRailFrame !== undefined) return;
     this.conversationRailFrame = requestAnimationFrame(() => {
       this.conversationRailFrame = undefined;
@@ -1040,6 +1169,7 @@ export class ChatView extends LitElement {
   }
 
   private updateConversationRailPosition(): void {
+    if (this.draggingConversationMeter) return;
     if (!this.messages.length || this.messageTotal <= 0) {
       this.currentConversationIndex = undefined;
       return;
@@ -1052,6 +1182,39 @@ export class ChatView extends LitElement {
       return;
     }
     this.currentConversationIndex = clampNumber(this.pinnedToBottom ? this.messageStart + this.messages.length - 1 : this.messageStart, 0, Math.max(0, total - 1));
+  }
+
+  private readonly onConversationMeterSeek = (event: CustomEvent<{ percent: number; dragging?: boolean }>): void => {
+    const dragging = event.detail.dragging === true;
+    this.draggingConversationMeter = dragging;
+    this.scrollToConversationPercent(event.detail.percent, dragging);
+  };
+
+  private scrollToConversationPercent(percent: number, dragging = false): void {
+    const chat = this.chat;
+    if (chat === undefined) return;
+    const nextPercent = clampPercent(percent);
+    const maxScroll = Math.max(0, chat.scrollHeight - chat.clientHeight);
+    this.withInstantMeterScroll(chat, () => {
+      chat.scrollTop = (nextPercent / 100) * maxScroll;
+    }, dragging);
+    this.pinnedToBottom = nextPercent >= 99 || this.isAtBottom();
+    this.lastScrollTop = chat.scrollTop;
+    this.lastClientHeight = chat.clientHeight;
+    const total = this.conversationDisplayTotal();
+    this.currentConversationIndex = total <= 1 ? 0 : clampNumber((nextPercent / 100) * (total - 1), 0, total - 1);
+    if (nextPercent <= 2 && this.hasMore && !this.loadingMore) this.requestLoadMore();
+  }
+
+  private withInstantMeterScroll(chat: HTMLDivElement, callback: () => void, keepInstant: boolean): void {
+    chat.style.scrollBehavior = "auto";
+    callback();
+    if (this.meterScrollResetFrame !== undefined) cancelAnimationFrame(this.meterScrollResetFrame);
+    if (keepInstant) return;
+    this.meterScrollResetFrame = requestAnimationFrame(() => {
+      this.meterScrollResetFrame = undefined;
+      chat.style.scrollBehavior = "";
+    });
   }
 
   private scrollMarkers(): HTMLElement[] {

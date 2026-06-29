@@ -15,18 +15,19 @@ const finalAssistant = {
 };
 
 describe("applyTranscriptEvent", () => {
-  it("streams thinking and text into one assistant message", () => {
+  it("streams thinking and assistant text deltas into the transcript", () => {
     let messages: ChatLine[] = [];
     messages = applyTranscriptEvent(messages, { type: "assistant.thinking.delta", text: "pla" }) ?? messages;
     messages = applyTranscriptEvent(messages, { type: "assistant.thinking.delta", text: "n" }) ?? messages;
-    messages = applyTranscriptEvent(messages, { type: "assistant.delta", text: "answer" }) ?? messages;
+    messages = applyTranscriptEvent(messages, { type: "assistant.delta", text: " ans" }) ?? messages;
+    messages = applyTranscriptEvent(messages, { type: "assistant.delta", text: "wer" }) ?? messages;
 
     expect(messages).toEqual([
-      { role: "assistant", parts: [{ type: "thinking", text: "plan" }, { type: "text", text: "answer" }] },
+      { role: "assistant", parts: [{ type: "thinking", text: "plan" }, { type: "text", text: " answer" }] },
     ]);
   });
 
-  it("clears Model response failed on assistant.delta when retry produces output", () => {
+  it("clears stale Model response failed when assistant text starts streaming", () => {
     const messages: ChatLine[] = [
       textMessage("user", "question"),
       textMessage("system", "Model response failed: 500 empty_stream: upstream stream closed before first payload"),
@@ -57,6 +58,21 @@ describe("applyTranscriptEvent", () => {
     ];
 
     expect(applyTranscriptEvent(messages, { type: "assistant.delta", text: "" })).toEqual(messages);
+  });
+
+  it("strips TUI flavor text and echoed prompt from finalized assistant messages", () => {
+    const streamed: ChatLine[] = [textMessage("user", "了解项目")];
+
+    expect(applyTranscriptEvent(streamed, {
+      type: "message.end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "了解项目\n\nsegfault (core dumped emotionally)\n\n了解项目\n\n这是正式回答。" }],
+      },
+    })).toEqual([
+      textMessage("user", "了解项目"),
+      textMessage("assistant", "这是正式回答。"),
+    ]);
   });
 
   it("replaces the streamed assistant message with the finalized history shape", () => {

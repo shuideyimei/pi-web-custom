@@ -6,6 +6,7 @@ import { machineSessionKey } from "../machineKeys";
 import { PI_WEB_CAPABILITIES } from "../../../shared/capabilities";
 import { loadDraft, saveDraft } from "../promptDraftStorage";
 import { SessionController, type SessionEventSocket } from "./sessionController";
+import type { SessionUiEvent } from "../sessionSocket";
 import { InMemorySessionSelectionMemory } from "./sessionSelection";
 
 class MemoryStorage implements Storage {
@@ -38,17 +39,23 @@ class MemoryStorage implements Storage {
 
 class FakeSocket implements SessionEventSocket {
   readonly connectedSessionIds: string[] = [];
+  private handler: ((event: SessionUiEvent) => void) | undefined;
 
-  connect(session: SessionRef): void {
+  connect(session: SessionRef, onEvent: (event: SessionUiEvent) => void): void {
     this.connectedSessionIds.push(session.id);
+    this.handler = onEvent;
   }
 
-  setHandler(): void {
-    // Test socket does not emit events.
+  setHandler(onEvent: (event: SessionUiEvent) => void): void {
+    this.handler = onEvent;
+  }
+
+  emit(event: SessionUiEvent): void {
+    this.handler?.(event);
   }
 
   close(): void {
-    // No-op.
+    this.handler = undefined;
   }
 }
 
@@ -202,6 +209,45 @@ describe("SessionController", () => {
 
     expect(state.sessions.map((session) => session.id)).toEqual(["started-session"]);
     expect(isCachedNewSessionInfo(state.sessions[0])).toBe(true);
+  });
+
+  it("shows live thinking and tool starts during stream catch-up", async () => {
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    Object.defineProperty(globalThis, "requestAnimationFrame", { value: (callback: FrameRequestCallback) => { const id = 1; setTimeout(() => { callback(0); }, 0); return id; }, configurable: true });
+    Object.defineProperty(globalThis, "cancelAnimationFrame", { value: () => { /* no-op */ }, configurable: true });
+
+    try {
+      let state: AppState = { ...initialAppState(), selectedWorkspace: workspace, sessions: [oldSession] };
+      const socket = new FakeSocket();
+      const api: typeof defaultApi = {
+        ...defaultApi,
+        messages: () => Promise.resolve({ messages: [{ role: "user", content: "question" }], start: 0, total: 1 }),
+        status: (session) => Promise.resolve({ ...status(sessionLookupId(session)), isStreaming: true }),
+      };
+      const controller = new SessionController(
+        () => state,
+        (patch) => { state = { ...state, ...patch }; },
+        () => undefined,
+        undefined,
+        { api, socket },
+      );
+
+      await controller.selectSession(oldSession, { updateUrl: false });
+      socket.emit({ type: "assistant.thinking.delta", text: "checking" });
+      socket.emit({ type: "tool.start", toolName: "bash", toolCallId: "tool-1", summary: "npm test", args: { command: "npm test" } });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(state.isReceivingPartialStream).toBe(true);
+      expect(state.messages.at(-2)).toMatchObject({ role: "assistant", parts: [{ type: "thinking", text: "checking" }] });
+      expect(state.messages.at(-1)).toMatchObject({
+        role: "tool",
+        parts: [{ type: "toolExecution", toolCallId: "tool-1", toolName: "bash", summary: "npm test", status: "running" }],
+      });
+    } finally {
+      Object.defineProperty(globalThis, "requestAnimationFrame", { value: originalRequestAnimationFrame, configurable: true });
+      Object.defineProperty(globalThis, "cancelAnimationFrame", { value: originalCancelAnimationFrame, configurable: true });
+    }
   });
 
   it("toggles the per-session sending state around an inline attachment send and forwards attachments", async () => {
