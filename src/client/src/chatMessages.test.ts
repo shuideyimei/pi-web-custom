@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendText, appendThinking, isModelResponseFailedLine, normalizeMessage, normalizeMessages, textMessage } from "./chatMessages";
+import { appendText, appendThinking, isModelResponseFailedLine, normalizeMessage, normalizeMessages, summarizeArgs, textMessage } from "./chatMessages";
 
 describe("chat message normalization", () => {
   it("normalizes simple text messages and drops empty content", () => {
@@ -33,6 +33,21 @@ describe("chat message normalization", () => {
     expect(normalizeMessage({ role: "assistant", content: [{ type: "toolCall", name: "subagent", arguments: { tasks: [{ agent: "reviewer", count: 2 }, { agent: "oracle" }] } }] })).toEqual([
       { role: "assistant", parts: [{ type: "toolCall", toolName: "subagent", summary: "parallel (3)", args: { tasks: [{ agent: "reviewer", count: 2 }, { agent: "oracle" }] } }] },
     ]);
+  });
+
+  it("summarizes structured user input requests by question", () => {
+    const args = {
+      questions: [{
+        question: "是否按此计划分批提交？",
+        options: [
+          { label: "Yes (Recommended)", description: "按 3 个批次提交，不提交 render-chat.mts/render-test.mts" },
+          { label: "No", description: "先不提交" },
+        ],
+      }],
+      metadata: { source: "test" },
+    };
+
+    expect(summarizeArgs(args, "request_user_input")).toBe("Ask 1 question: 是否按此计划分批提交？");
   });
 
   it("normalizes image content into image parts", () => {

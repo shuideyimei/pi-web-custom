@@ -325,6 +325,8 @@ export function summarizeArgs(args: unknown, toolName?: string): string {
     const subagentSummary = summarizeSubagentArgs(args);
     if (subagentSummary !== undefined) return subagentSummary;
   }
+  const inputRequestSummary = summarizeUserInputRequestArgs(args);
+  if (inputRequestSummary !== undefined) return inputRequestSummary;
   if (!isRecord(args)) return stringifyPrimitive(args);
   const command = getString(args, "command");
   if (command !== undefined) return command;
@@ -343,6 +345,26 @@ function shortValue(value: unknown): string {
   if (Array.isArray(value)) return `${String(value.length)} item${value.length === 1 ? "" : "s"}`;
   if (typeof value === "object" && value !== null) return "object";
   return "";
+}
+
+function summarizeUserInputRequestArgs(args: unknown): string | undefined {
+  if (!isRecord(args)) return undefined;
+  const questions = args["questions"];
+  if (!Array.isArray(questions) || questions.length === 0) return undefined;
+  const firstQuestion = questions.find(isQuestionRecord);
+  if (firstQuestion === undefined) return undefined;
+  const question = getString(firstQuestion, "question") ?? getString(firstQuestion, "header") ?? "question";
+  return `Ask ${String(questions.length)} question${questions.length === 1 ? "" : "s"}: ${truncateInline(question, 96)}`;
+}
+
+function isQuestionRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && (typeof value["question"] === "string" || typeof value["header"] === "string");
+}
+
+function truncateInline(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

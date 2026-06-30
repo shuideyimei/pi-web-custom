@@ -46,6 +46,10 @@ function toolResultPart(
   return { type: "toolResult", toolName, isError, toolCallId, text };
 }
 
+function skillReadPart(name = "playwright", path = "/skills/playwright/SKILL.md"): ChatPart {
+  return { type: "skillRead", name, path };
+}
+
 function chatLine(
   role: ChatLine["role"],
   parts: ChatPart[],
@@ -166,6 +170,53 @@ describe("buildTimelineNodes", () => {
     assert.equal(nodes.length, 1);
     assert.equal(nodeAt(nodes, 0).type, "step");
     assert.equal(nodeAt(nodes, 0).step?.bashOutputs.length, 1);
+  });
+
+  it("folds skill reads into step tool aggregations", () => {
+    const messages = [
+      chatLine("assistant", [{ type: "thinking", text: "load skill" }]),
+      chatLine("skill", [skillReadPart("code-quality-architecture", "/skills/code-quality-architecture/SKILL.md")]),
+      chatLine("assistant", [textPart("Done")]),
+    ];
+
+    const nodes = buildTimelineNodes(messages);
+
+    assert.equal(nodes.length, 2);
+    const stepNode = nodeAt(nodes, 0);
+    assert.equal(stepNode.type, "step");
+    assert.equal(stepNode.status, "success");
+    assert.equal(stepNode.step?.tools.length, 1);
+    assert.deepEqual(stepNode.step?.tools[0]?.skillRead, {
+      type: "skillRead",
+      name: "code-quality-architecture",
+      path: "/skills/code-quality-architecture/SKILL.md",
+    });
+    assert.equal(nodeAt(nodes, 1).type, "assistant");
+    assert.isFalse(nodes.some((node) => node.type === "skill"));
+  });
+
+  it("merges skill reads with their read result into one load aggregation", () => {
+    const messages = [
+      chatLine("assistant", [{ type: "thinking", text: "load skill" }]),
+      chatLine("skill", [{ type: "skillRead", name: "mineru-document-extractor", path: "/skills/mineru-document-extractor/SKILL.md", toolCallId: "read-skill" }]),
+      chatLine("tool", [toolExecutionPart("read", "success", "read-skill", "/skills/mineru-document-extractor/SKILL.md")]),
+    ];
+
+    const nodes = buildTimelineNodes(messages);
+
+    assert.equal(nodes.length, 1);
+    const stepNode = nodeAt(nodes, 0);
+    assert.equal(stepNode.type, "step");
+    assert.equal(stepNode.step?.tools.length, 1);
+    const aggregation = stepNode.step?.tools[0];
+    assert.deepEqual(aggregation?.skillRead, {
+      type: "skillRead",
+      name: "mineru-document-extractor",
+      path: "/skills/mineru-document-extractor/SKILL.md",
+      toolCallId: "read-skill",
+    });
+    assert.equal(aggregation?.execution?.toolName, "read");
+    assert.isFalse(nodes.some((node) => node.type === "skill"));
   });
 
   it("converts a system text message into an error node", () => {

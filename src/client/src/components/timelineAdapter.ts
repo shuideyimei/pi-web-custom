@@ -45,6 +45,7 @@ export interface ToolAggregation {
   toolCall?: Extract<ChatPart, { type: "toolCall" }>;
   execution?: ToolExecutionPart;
   result?: Extract<ChatPart, { type: "toolResult" }>;
+  skillRead?: Extract<ChatPart, { type: "skillRead" }>;
 }
 
 // ─── Timeline node ────────────────────────────────────────────────────
@@ -121,6 +122,7 @@ export function buildTimelineNodes(
       if (agg.toolCall !== undefined) parts.push(agg.toolCall);
       if (agg.execution !== undefined) parts.push(agg.execution);
       if (agg.result !== undefined) parts.push(agg.result);
+      if (agg.skillRead !== undefined) parts.push(agg.skillRead);
     }
     return {
       type: "step",
@@ -186,6 +188,14 @@ export function buildTimelineNodes(
           break;
         }
 
+        case "skillRead": {
+          const id = part.toolCallId ?? `__skill_${String(syntheticToolIndex++)}`;
+          const existing = toolBuffer.get(id) ?? {};
+          existing.skillRead = part;
+          toolBuffer.set(id, existing);
+          break;
+        }
+
         case "thinking": {
           flushToolBuffer(`tg:${partKey}`, message.meta);
           flushOpenStep(`step:${partKey}`, message.meta);
@@ -221,7 +231,6 @@ export function buildTimelineNodes(
         }
 
         case "skillInvocation":
-        case "skillRead":
           flushToolBuffer(`tg:${partKey}`, message.meta);
           flushOpenStep(`step:${partKey}`, message.meta);
           nodes.push({ type: "skill", status: "idle", key: `sk:${partKey}`, parts: [part], meta: message.meta });
@@ -312,5 +321,6 @@ function toolAggregationStatus(agg: ToolAggregation): TimelineNodeStatus {
   }
   if (agg.result !== undefined) return agg.result.isError ? "error" : "success";
   if (agg.toolCall !== undefined) return "pending";
+  if (agg.skillRead !== undefined) return "success";
   return "idle";
 }
