@@ -157,7 +157,7 @@ export class AppMobileMainTabs extends LitElement {
     .mobile-tabs { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 8px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
     .mobile-tabs button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
     .mobile-tabs .navigation-tab { display: none; }
-    .mobile-tabs button.selected { border-color: var(--pi-accent); background: var(--pi-selection-bg); }
+    .mobile-tabs button.selected { border-color: color-mix(in srgb, var(--pi-text) 20%, transparent); background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
     .tab-icon { flex: 0 0 auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
     .tab-custom-icon { flex: 0 0 auto; width: 18px; height: 18px; display: inline-grid; place-items: center; color: currentColor; pointer-events: none; }
     .tab-custom-icon svg { width: 18px; height: 18px; pointer-events: none; }

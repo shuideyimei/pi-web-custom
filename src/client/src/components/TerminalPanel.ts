@@ -542,7 +542,7 @@ export class TerminalPanel extends LitElement {
     .terminal-shell { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-glass-highlight) 60%, transparent), transparent 160px), var(--pi-terminal-bg); }
     .terminal-tabs { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; padding: 6px; border-bottom: 1px solid var(--pi-border-muted); background: color-mix(in srgb, var(--pi-bg) 72%, transparent); overflow: auto; }
     button { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 180px; border: 1px solid var(--pi-border); border-radius: 7px; background: var(--pi-surface); color: var(--pi-text); padding: 5px 7px; cursor: pointer; }
-    button.selected { border-color: var(--pi-accent); background: var(--pi-selection-bg); }
+    button.selected { border-color: color-mix(in srgb, var(--pi-text) 20%, transparent); background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
     button.new { flex: 0 0 auto; color: var(--pi-muted); }
     .soft-keys-toggle { flex: 0 0 auto; }
     .soft-keys-toggle .keyboard-icon { flex: 0 0 auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }

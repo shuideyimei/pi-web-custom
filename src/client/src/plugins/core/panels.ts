@@ -1,11 +1,20 @@
 import { html, type TemplateResult } from "lit";
 import type { GitDiffResponse, GitStatusResponse } from "../../api";
+import { buildSessionWorkSummary } from "../../sessionWorkSummary";
 import { renderBuiltinTabIcon } from "../../components/tabIcons";
+import "../../components/SessionSummaryPanel";
 import "../../components/WorkspaceFilesPanel";
 import type { WorkspacePanelContribution, WorkspacePanelContext } from "../types";
 
 export function createCoreWorkspacePanels(): WorkspacePanelContribution[] {
   return [
+    {
+      id: "workspace.summary",
+      title: "Summary",
+      icon: renderBuiltinTabIcon("summary"),
+      order: 5,
+      render: renderSummary,
+    },
     {
       id: "workspace.files",
       title: "Files",
@@ -30,6 +39,19 @@ export function createCoreWorkspacePanels(): WorkspacePanelContribution[] {
       render: renderTerminal,
     },
   ];
+}
+
+function renderSummary(context: WorkspacePanelContext): TemplateResult {
+  const summary = buildSessionWorkSummary({
+    messages: context.state.messages,
+    gitStatus: context.gitStatus,
+    selectedFilePath: context.selectedFilePath,
+    selectedDiffPath: context.selectedDiffPath,
+    activeTerminalCount: context.activeTerminalCount,
+    selectedWorkspace: context.workspace,
+    status: context.state.status,
+  });
+  return html`<session-summary-panel .summary=${summary}></session-summary-panel>`;
 }
 
 function renderFiles(context: WorkspacePanelContext): TemplateResult {

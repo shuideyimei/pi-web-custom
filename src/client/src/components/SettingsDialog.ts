@@ -228,7 +228,7 @@ export class SettingsDialog extends LitElement {
     .settings-nav { min-height: 0; padding: 10px; border-right: 1px solid var(--codex-dialog-hairline); background: color-mix(in srgb, var(--codex-dialog-panel) 72%, transparent); overflow: auto; scrollbar-width: thin; }
     .settings-nav button { display: grid; gap: 2px; width: 100%; margin: 0 0 6px; text-align: left; border-color: transparent; background: transparent; }
     .settings-nav button:hover, .settings-nav button:focus { background: var(--codex-dialog-panel-hover); }
-    .settings-nav button.selected { border-color: color-mix(in srgb, var(--pi-accent) 72%, var(--codex-dialog-border)); background: color-mix(in srgb, var(--pi-accent) 16%, var(--codex-dialog-panel)); }
+    .settings-nav button.selected { border-color: color-mix(in srgb, var(--pi-text) 20%, transparent); background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
     .settings-nav small { color: var(--pi-muted); }
     .settings-content { min-width: 0; min-height: 0; overflow: auto; padding: 18px; scrollbar-width: thin; }
 

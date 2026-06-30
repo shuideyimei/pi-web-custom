@@ -147,7 +147,7 @@ export function initialAppState(): AppState {
     actionPaletteOpen: false,
     projectDialogOpen: false,
     machineDialogOpen: false,
-    workspaceTool: "core:workspace.files",
+    workspaceTool: "core:workspace.summary",
     mainView: "chat",
     fileTree: [],
     expandedDirs: {},

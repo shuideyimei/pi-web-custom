@@ -205,12 +205,12 @@ export class AppNavigationPanel extends LitElement {
   static override styles = css`
     :host { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
     :host([compact]) { flex: 1 1 auto; }
-    header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; border-bottom: 1px solid var(--pi-glass-border); background: transparent; }
+    header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; border-bottom: 1px solid var(--pi-border-muted); background: var(--pi-surface); }
     header strong { flex: 0 0 auto; }
     machine-switcher { flex: 1 1 auto; min-width: 0; }
     :host([compact]) header { display: none; }
     .header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
-    machine-list, project-list, workspace-list { flex: 0 0 auto; max-height: 26%; min-height: 0; overflow: hidden; border-bottom: 1px solid var(--pi-glass-border); }
+    machine-list, project-list, workspace-list { flex: 0 0 auto; max-height: 26%; min-height: 0; overflow: hidden; border-bottom: 1px solid var(--pi-border-muted); }
     session-list { flex: 1 1 auto; min-height: 0; overflow: hidden; }
     machine-list[collapsed],
     project-list[collapsed],
@@ -224,7 +224,7 @@ export class AppNavigationPanel extends LitElement {
     :host([compact]) project-list[collapsed],
     :host([compact]) workspace-list[collapsed],
     :host([compact]) session-list[collapsed] { flex: 0 0 auto; min-height: auto; overflow: hidden; }
-    button { border: 1px solid var(--pi-glass-border); border-radius: 8px; background: var(--pi-glass-bg); color: var(--pi-text); padding: 7px 9px; cursor: pointer; }
+    button { border: 1px solid var(--pi-border-muted); border-radius: 8px; background: var(--pi-bg); color: var(--pi-text); padding: 7px 9px; cursor: pointer; }
   `;
 }
 
