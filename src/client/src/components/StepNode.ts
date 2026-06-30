@@ -1,5 +1,6 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { activityShimmerStyles } from "./activityShimmerStyles";
 import type { StepData, ToolAggregation } from "./timelineAdapter";
 import "./ToolCallNode";
 
@@ -10,8 +11,8 @@ import "./ToolCallNode";
  * Also handles tool-only groups (no thinking) from the adapter.
  *
  * Collapsed (default):
- *   ● Thinking… ────────── ▸    (while thinking, shimmer sweep)
- *   ● Working… ─────────── ▸    (while tools running, shimmer sweep)
+ *   ● Thinking… ▸              (while thinking, text shimmer)
+ *   ● Working… ▸               (while tools running, text shimmer)
  *   ● Read 3 files · Ran 2 ▸    (after tools complete, compact summary)
  *
  * Expanded (click):
@@ -19,13 +20,7 @@ import "./ToolCallNode";
  *
  * Thinking content is never shown (Codex design: thinking is private).
  */
-const STATUS_PHRASES = [
-  "Thinking…",
-  "Analyzing request…",
-  "Inspecting project…",
-  "Reasoning…",
-  "Planning…",
-] as const;
+const THINKING_LABEL = "Thinking";
 
 @customElement("step-node")
 export class StepNode extends LitElement {
@@ -34,40 +29,6 @@ export class StepNode extends LitElement {
   @property({ type: Boolean }) summaryReady = true;
   @state() private expanded = false;
   @state() private userToggled = false;
-  @state() private phraseIndex = 0;
-  private phraseTimer: number | undefined;
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    if (this.streaming) this.startPhraseCycle();
-  }
-
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    this.stopPhraseCycle();
-  }
-
-  protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has("streaming")) {
-      if (this.streaming) this.startPhraseCycle();
-      else this.stopPhraseCycle();
-    }
-  }
-
-  private startPhraseCycle(): void {
-    this.stopPhraseCycle();
-    this.phraseTimer = window.setInterval(() => {
-      this.phraseIndex = (this.phraseIndex + 1) % STATUS_PHRASES.length;
-    }, 3000);
-  }
-
-  private stopPhraseCycle(): void {
-    if (this.phraseTimer !== undefined) {
-      window.clearInterval(this.phraseTimer);
-      this.phraseTimer = undefined;
-    }
-    this.phraseIndex = 0;
-  }
 
   override render() {
     const step = this.step;
@@ -76,7 +37,6 @@ export class StepNode extends LitElement {
     const hasThinking = step.thinking !== undefined;
     const isThinkingOnly = hasThinking && step.tools.length === 0 && step.textParts.length === 0;
     const hasText = step.textParts.length > 0;
-    const hasErrors = step.tools.some((agg) => toolAggStatus(agg) === "error");
     const isRunning = step.tools.some(
       (agg) => toolAggStatus(agg) === "running" || toolAggStatus(agg) === "pending",
     );
@@ -92,16 +52,17 @@ export class StepNode extends LitElement {
     }
 
     const isActive = isAnimating || !this.summaryReady;
+    const shouldShimmer = this.streaming && isActive;
 
     // Determine active label. While waiting for the next assistant text, keep the
     // activity row visible but don't switch to the completed summary yet.
     const activeTool = currentRunningTool(step) ?? latestTool(step);
     const label = activeTool !== undefined
       ? runningToolLabel(activeTool)
-      : STATUS_PHRASES[this.phraseIndex % STATUS_PHRASES.length] ?? STATUS_PHRASES[0];
+      : THINKING_LABEL;
 
     return html`
-      <div class="step${effectiveOpen ? " expanded" : ""}${isActive ? " animating" : ""}${hasErrors ? " has-errors" : ""}${step.tools.length === 0 ? " empty" : ""}">
+      <div class="step${effectiveOpen ? " expanded" : ""}${shouldShimmer ? " animating" : ""}${step.tools.length === 0 ? " empty" : ""}">
         <div
           class="step-header"
           role="button"
@@ -111,12 +72,10 @@ export class StepNode extends LitElement {
           @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.toggle(); } }}
         >
           ${isActive
-            ? html`<span class="step-label shimmer-text" title=${label} aria-hidden="true">${label}</span>`
+            ? shouldShimmer
+            ? html`<span class="step-label shimmer-text" title=${label}>${label}</span>`
+              : html`<span class="step-label active-label" title=${label}>${label}</span>`
             : html`<span class="step-label">${summary}</span>`
-          }
-          ${isActive
-            ? html`<span class="step-scan" aria-hidden="true"></span>`
-            : null
           }
           <span class="step-chevron" aria-hidden="true">${effectiveOpen ? "▾" : "▸"}</span>
         </div>
@@ -130,7 +89,7 @@ export class StepNode extends LitElement {
               </div>
             ` : null}
             ${step.tools.map((agg) => html`
-              <tool-call-node class="step-tool" .aggregation=${agg}></tool-call-node>
+              <tool-call-node class="step-tool" .aggregation=${agg} .agentActive=${this.streaming}></tool-call-node>
             `)}
           </div>
         ` : null}
@@ -143,7 +102,7 @@ export class StepNode extends LitElement {
     this.expanded = !this.expanded;
   }
 
-  static override styles = css`
+  static override styles = [activityShimmerStyles, css`
     :host { display: block; width: 100%; max-width: 100%; min-width: 0; }
 
     .step {
@@ -154,98 +113,57 @@ export class StepNode extends LitElement {
       min-width: 0;
       box-sizing: border-box;
     }
-    .step.expanded { gap: 4px; }
+    .step.expanded { gap: 6px; }
 
-    /* ── Single-line header ── */
     .step-header {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-height: 36px;
       min-width: 0;
-      padding: 2px 0;
+      box-sizing: border-box;
+      padding: 4px 0;
       cursor: pointer;
       user-select: none;
+      border: 0;
       border-radius: 4px;
-      transition: background .15s ease;
+      background: transparent;
+      overflow: hidden;
+      transition: color .15s ease, background .15s ease;
     }
-    .step-header:hover { background: rgba(255, 255, 255, 0.03); }
-    .step-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; border-radius: 4px; }
+    .step-header:hover { background: color-mix(in srgb, var(--pi-surface-hover) 45%, transparent); }
+    .step-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; }
 
-    /* ── Step label ── */
     .step-label {
       flex: 0 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      color: var(--pi-muted);
+      color: var(--activity-row-text);
       font-size: 12px;
       font-weight: 500;
       letter-spacing: .02em;
     }
 
-    /* ── Shimmer text: Codex-style character sweep ── */
-    .shimmer-text {
-      font-weight: 600;
-      letter-spacing: .02em;
-      color: var(--pi-dim);
-      background: linear-gradient(
-        90deg,
-        var(--pi-dim) 0%,
-        var(--pi-text-secondary) 40%,
-        var(--pi-dim) 60%,
-        var(--pi-dim) 100%
-      );
-      background-size: 250% 100%;
-      background-clip: text;
-      -webkit-background-clip: text;
-      animation: shimmer-sweep 2s ease-in-out infinite;
-    }
-    @keyframes shimmer-sweep {
-      0% { background-position: 100% 0; }
-      100% { background-position: -100% 0; }
-    }
-
-    /* ── Scanning shimmer bar ── */
-    .step-scan {
-      flex: 1 1 auto;
-      position: relative;
-      height: 2px;
-      min-width: 30px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--pi-border-muted) 30%, transparent);
-      overflow: hidden;
-    }
-    .step-scan::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: -30%;
-      width: 30%;
-      height: 100%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--pi-accent) 50%, transparent), transparent);
-      animation: step-scan 1.8s ease-in-out infinite;
-    }
-    @keyframes step-scan {
-      0% { left: -30%; }
-      100% { left: 100%; }
-    }
+    .shimmer-text { font-weight: 600; letter-spacing: .02em; }
 
     .step-chevron {
       flex: 0 0 auto;
       font-size: 11px;
-      color: var(--pi-muted);
+      color: var(--activity-row-text);
       opacity: .5;
     }
 
-    /* ── Expanded body ── */
     .step-body {
       display: grid;
-      gap: 2px;
-      padding-left: 4px;
+      gap: 6px;
+      max-height: min(440px, 55vh);
+      overflow: auto;
+      margin-left: 3px;
+      padding: 4px 0 4px 13px;
       border-left: 1px solid var(--pi-border-muted);
-      margin-left: 4px;
+      background: transparent;
     }
 
     /* ── Text parts inside step (expanded) ── */
@@ -258,16 +176,11 @@ export class StepNode extends LitElement {
       font-size: 13px;
       color: var(--pi-muted);
       line-height: 1.5;
-      padding: 4px 8px;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.02);
+      padding: 2px 0;
+      background: transparent;
     }
 
-    /* ── Error state ── */
-    .step.has-errors .step-label {
-      color: color-mix(in srgb, #f87b7b 50%, var(--pi-muted));
-    }
-  `;
+  `];
 }
 
 // ─── Utility functions ────────────────────────────────────────────────
@@ -276,6 +189,7 @@ function toolAggStatus(agg: ToolAggregation): string {
   if (agg.execution !== undefined) return agg.execution.status;
   if (agg.result !== undefined) return agg.result.isError ? "error" : "success";
   if (agg.toolCall !== undefined) return "pending";
+  if (agg.skillRead !== undefined) return "success";
   return "idle";
 }
 
@@ -292,14 +206,34 @@ function latestTool(step: StepData): ToolAggregation | undefined {
 }
 
 function runningToolLabel(agg: ToolAggregation): string {
-  const name = agg.toolCall?.toolName ?? agg.execution?.toolName ?? agg.result?.toolName ?? "tool";
+  const name = aggregationToolName(agg);
+  if (name === "load_skill") return "Loading skill";
+  if (name === "read") return "Reading files";
+  if (name === "edit" || name === "write" || name === "apply_patch") return "Editing files";
+  if (name === "grep" || name === "rg" || name === "glob") return "Searching codebase";
+  if (name === "web_search" || name === "fetch_content" || name === "search_query") return "Searching sources";
+  if (isUserInputToolName(name) || isUserInputRequestArgs(toolArgs(agg))) return "Waiting for input";
+  if (name === "bash") {
+    const command = stringArg(toolArgs(agg), "command");
+    if (command !== undefined && isTestCommand(command)) return "Running tests";
+    if (command !== undefined && isBuildCommand(command)) return "Running build";
+    return "Running command";
+  }
+  if (name === "browser" || name === "screenshot" || name === "open") return "Inspecting browser";
+  if (name === "subagent") return "Reviewing task";
   const detail = toolCallDetail(name, toolArgs(agg), agg.execution?.summary ?? agg.toolCall?.summary);
-  return `${name}${detail === "" ? "" : ` ${detail}`}`.replace(/\s+/g, " ").trim();
+  return detail === "" ? `Running ${name}` : `Running ${name}`;
 }
 
 function toolArgs(agg: ToolAggregation): Record<string, unknown> | undefined {
+  if (agg.skillRead !== undefined) return { name: agg.skillRead.name, path: agg.skillRead.path };
   const args = agg.toolCall?.args ?? agg.execution?.args;
   return isRecord(args) ? args : undefined;
+}
+
+function aggregationToolName(agg: ToolAggregation): string {
+  if (agg.skillRead !== undefined) return "load_skill";
+  return agg.execution?.toolName ?? agg.toolCall?.toolName ?? agg.result?.toolName ?? "tool";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -326,8 +260,8 @@ function toolCallDetail(toolName: string, args: Record<string, unknown> | undefi
   return summary ?? "";
 }
 
-function stringArg(args: Record<string, unknown>, key: string): string | undefined {
-  const value = args[key];
+function stringArg(args: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = args?.[key];
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
@@ -359,32 +293,89 @@ function stepSummary(step: StepData): string {
 
   const counts = new Map<string, number>();
   for (const agg of tools) {
-    const name = agg.execution?.toolName ?? agg.toolCall?.toolName ?? agg.result?.toolName ?? "tool";
+    const name = aggregationToolName(agg);
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
 
   const parts: string[] = [];
+  const testStatus = commandStatus(step, isTestCommand);
+  if (testStatus === "success") parts.push("Tests passed");
+  else if (testStatus === "error") parts.push("Tests failed");
+
+  const buildStatus = commandStatus(step, isBuildCommand);
+  if (buildStatus === "success") parts.push("Build passed");
+  else if (buildStatus === "error") parts.push("Build failed");
 
   const readCount = counts.get("read") ?? 0;
   if (readCount > 0) parts.push(`Read ${String(readCount)} file${readCount === 1 ? "" : "s"}`);
 
+  const skillCount = counts.get("load_skill") ?? 0;
+  if (skillCount > 0) parts.push(`Loaded ${String(skillCount)} skill${skillCount === 1 ? "" : "s"}`);
+
   const editCount = (counts.get("edit") ?? 0) + (counts.get("write") ?? 0);
   if (editCount > 0) parts.push(`Edited ${String(editCount)} file${editCount === 1 ? "" : "s"}`);
 
-  const bashCount = (counts.get("bash") ?? 0) + step.bashOutputs.length;
+  const bashCount = Math.max(0, (counts.get("bash") ?? 0) + step.bashOutputs.length - (testStatus === undefined ? 0 : 1) - (buildStatus === undefined ? 0 : 1));
   if (bashCount > 0) parts.push(`Ran ${String(bashCount)} command${bashCount === 1 ? "" : "s"}`);
 
-  const searchCount = (counts.get("web_search") ?? 0) + (counts.get("fetch_content") ?? 0);
+  const searchCount = (counts.get("web_search") ?? 0) + (counts.get("fetch_content") ?? 0) + (counts.get("search_query") ?? 0);
   if (searchCount > 0) parts.push(`Searched ${String(searchCount)} site${searchCount === 1 ? "" : "s"}`);
 
-  const globCount = (counts.get("glob") ?? 0) + (counts.get("grep") ?? 0);
+  const globCount = (counts.get("glob") ?? 0) + (counts.get("grep") ?? 0) + (counts.get("rg") ?? 0);
   if (globCount > 0) parts.push(`Searched ${String(globCount)} pattern${globCount === 1 ? "" : "s"}`);
 
-  const known = new Set(["read", "edit", "write", "bash", "web_search", "fetch_content", "glob", "grep"]);
-  const otherCount = [...counts.entries()]
-    .filter(([name]) => !known.has(name))
-    .reduce((sum, [, count]) => sum + count, 0);
+  const inputRequestCount = tools.filter((agg) => isUserInputToolName(aggregationToolName(agg)) || isUserInputRequestArgs(toolArgs(agg))).length;
+  if (inputRequestCount > 0) parts.push(`Requested ${String(inputRequestCount)} input${inputRequestCount === 1 ? "" : "s"}`);
+
+  const known = new Set(["read", "load_skill", "edit", "write", "bash", "web_search", "fetch_content", "search_query", "glob", "grep", "rg"]);
+  const otherCount = tools
+    .filter((agg) => {
+      const name = aggregationToolName(agg);
+      return !known.has(name) && !isUserInputToolName(name) && !isUserInputRequestArgs(toolArgs(agg));
+    })
+    .length;
   if (otherCount > 0) parts.push(`${String(otherCount)} other tool${otherCount === 1 ? "" : "s"}`);
 
   return parts.length > 0 ? parts.join(" · ") : `${String(tools.length)} tool${tools.length === 1 ? "" : "s"}`;
+}
+
+function commandStatus(step: StepData, predicate: (command: string) => boolean): "success" | "error" | undefined {
+  for (const agg of step.tools) {
+    const command = stringArg(toolArgs(agg), "command");
+    if (command === undefined || !predicate(command)) continue;
+    const status = toolAggStatus(agg);
+    if (status === "error") return "error";
+    if (status === "success") return "success";
+  }
+  for (const output of step.bashOutputs) {
+    const command = shellCommandFromText(output);
+    if (command === undefined || !predicate(command)) continue;
+    if (/\nexit\s+0(?:\n|$)/u.test(output)) return "success";
+    if (/\nexit\s+\d+(?:\n|$)/u.test(output)) return "error";
+  }
+  return undefined;
+}
+
+function shellCommandFromText(text: string): string | undefined {
+  const line = text.split("\n").find((candidate) => candidate.startsWith("$ "));
+  const command = line?.slice(2).trim();
+  return command === undefined || command === "" ? undefined : command;
+}
+
+function isTestCommand(command: string): boolean {
+  return /\b(test|vitest|jest|playwright|pytest)\b|cargo\s+test|go\s+test|npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+test/u.test(command);
+}
+
+function isBuildCommand(command: string): boolean {
+  return /\b(build|typecheck|lint)\b|npm\s+run\s+(build|typecheck|lint)|pnpm\s+(build|typecheck|lint)/u.test(command);
+}
+
+function isUserInputToolName(name: string): boolean {
+  return name === "request_user_input" || name.endsWith(".request_user_input");
+}
+
+function isUserInputRequestArgs(args: Record<string, unknown> | undefined): boolean {
+  if (args === undefined) return false;
+  const questions = args["questions"];
+  return Array.isArray(questions) && questions.some((question) => isRecord(question) && typeof question["question"] === "string");
 }

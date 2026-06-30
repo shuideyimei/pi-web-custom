@@ -1,7 +1,8 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { activityShimmerStyles } from "./activityShimmerStyles";
 import type { ToolAggregation } from "./timelineAdapter";
-import type { ToolExecutionPart } from "./shared";
+import type { ChatPart, ToolExecutionPart } from "./shared";
 import "./SubagentToolDetails";
 
 const MAX_COLLAPSED_RESULT_LINES = 8;
@@ -22,6 +23,7 @@ const MAX_COLLAPSED_DIFF_LINES = 180;
 @customElement("tool-call-node")
 export class ToolCallNode extends LitElement {
   @property({ attribute: false }) aggregation: ToolAggregation | undefined;
+  @property({ type: Boolean }) agentActive = false;
   @state() private expanded = false;
   @state() private showFullDiff = false;
   @state() private showFullResult = false;
@@ -36,14 +38,16 @@ export class ToolCallNode extends LitElement {
     const execution = agg.execution;
     const toolCall = agg.toolCall;
     const result = agg.result;
+    const skillRead = agg.skillRead;
 
     // Derive display values — prefer execution, fall back to toolCall/result
-    const toolName = execution?.toolName ?? toolCall?.toolName ?? result?.toolName ?? "tool";
-    const status: ToolExecutionPart["status"] = execution?.status ?? (result?.isError === true ? "error" : result !== undefined ? "success" : "pending");
-    const args = execution?.args ?? toolCall?.args;
+    const toolName = skillRead !== undefined ? "load_skill" : execution?.toolName ?? toolCall?.toolName ?? result?.toolName ?? "tool";
+    const status: ToolExecutionPart["status"] = skillRead !== undefined ? "success" : execution?.status ?? (result?.isError === true ? "error" : result !== undefined ? "success" : "pending");
+    const args = skillRead !== undefined ? { name: skillRead.name, path: skillRead.path } : execution?.args ?? toolCall?.args;
+    const inputRequest = userInputRequestFromArgs(args);
     const command = toolName === "bash" ? commandFromArgs(args) : undefined;
-    const summary = command ?? execution?.summary ?? toolCall?.summary ?? "";
-    const filePath = pathFromArgs(args);
+    const summary = skillRead?.name ?? command ?? execution?.summary ?? toolCall?.summary ?? userInputRequestSummary(inputRequest) ?? "";
+    const filePath = skillRead?.path ?? pathFromArgs(args);
     const actualDiff = execution === undefined ? undefined : diffFromDetails(execution.details);
     const preview = execution?.preview;
     const visibleDiff = actualDiff ?? preview?.diff;
@@ -53,14 +57,20 @@ export class ToolCallNode extends LitElement {
     const errorText = preview?.error;
     const bodyText = visibleDiff === undefined ? resultText : undefined;
     const effectiveOpen = this.userToggled ? this.expanded : false;
+    const shouldShimmer = this.agentActive && (status === "pending" || status === "running");
+    const label = skillRead !== undefined
+      ? `Loaded ${skillRead.name}`
+      : inputRequest !== undefined
+        ? userInputRequestStatusLabel(status)
+        : toolSummaryLabel(toolName, status, command);
 
     return html`
       <div class=${`tcn ${status}${effectiveOpen ? " expanded" : ""}`}>
         <div class="tcn-summary" role="button" tabindex="0" aria-expanded=${String(effectiveOpen)}
           @click=${() => { this.toggle(); }}
           @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.toggle(); } }}>
-          <strong class="tcn-name">${toolName}</strong>
-          <span class="tcn-sep">·</span>
+          <strong class=${shouldShimmer ? "tcn-name shimmer-text" : "tcn-name"}>${label}</strong>
+          ${filePath !== undefined || summary !== "" ? html`<span class="tcn-sep">·</span>` : null}
           ${filePath !== undefined
             ? html`<span class="tcn-path">${filePath}</span>`
             : summary !== ""
@@ -68,6 +78,7 @@ export class ToolCallNode extends LitElement {
               : null}
           ${diffStats !== undefined ? html`<span class="tcn-diff-stats"><b class="added">+${diffStats.added}</b><span class="sep">/</span><b class="removed">-${diffStats.removed}</b></span>` : null}
           ${editCountLabel(execution) !== undefined ? html`<span class="tcn-edit-count">${editCountLabel(execution)}</span>` : null}
+          <span class="tcn-chevron" aria-hidden="true">${effectiveOpen ? "▾" : "▸"}</span>
         </div>
         ${effectiveOpen ? html`
           <div class="tcn-body">
@@ -101,15 +112,37 @@ export class ToolCallNode extends LitElement {
     bodyText: string | undefined,
   ) {
     if (toolName === "subagent") return this.renderSubagentDetails(args, bodyText, this.aggregation?.execution?.details ?? this.aggregation?.result?.details);
+    if (toolName === "load_skill") return this.renderSkillReadDetails(this.aggregation?.skillRead, args, bodyText);
     if (toolName === "bash") return this.renderBashCommand(args, bodyText);
     if (toolName === "read") return this.renderReadDetails(args, bodyText);
     if (toolName === "edit" || toolName === "write") return this.renderFileChangeDetails(toolName, args, visibleDiff, diffLabel, bodyText);
+    if (isUserInputToolName(toolName) || userInputRequestFromArgs(args) !== undefined) return this.renderUserInputRequestDetails(args, bodyText);
     if (visibleDiff !== undefined) return this.renderDiffBody(visibleDiff, diffLabel);
     return this.renderGenericToolDetails(args, bodyText);
   }
 
   private renderSubagentDetails(args: unknown, output: string | undefined, details: unknown) {
     return html`<subagent-tool-details .args=${args} .details=${details} .resultText=${output ?? ""} .status=${this.aggregation?.execution?.status ?? "pending"}></subagent-tool-details>`;
+  }
+
+  private renderSkillReadDetails(skillRead: Extract<ChatPart, { type: "skillRead" }> | undefined, args: unknown, output: string | undefined) {
+    const name = skillRead?.name ?? getString(args, "name") ?? "skill";
+    const path = skillRead?.path ?? pathFromArgs(args);
+    return html`
+      <div class="tcn-file-block">
+        <div class="tcn-file-change">
+          <span class="tcn-file-action">load skill</span>
+          <span class="tcn-file-path">${name}</span>
+        </div>
+        ${path === undefined ? null : html`
+          <div class="tcn-file-change">
+            <span class="tcn-file-action">path</span>
+            <span class="tcn-file-path">${path}</span>
+          </div>
+        `}
+        ${this.renderInlineOutput(output)}
+      </div>
+    `;
   }
 
   private renderBashCommand(args: unknown, output: string | undefined) {
@@ -208,6 +241,49 @@ export class ToolCallNode extends LitElement {
     `;
   }
 
+  private renderUserInputRequestDetails(args: unknown, output: string | undefined) {
+    const request = userInputRequestFromArgs(args);
+    if (request === undefined) return this.renderGenericToolDetails(args, output);
+    return html`
+      <section class="tcn-input-request" aria-label="Input request parameters">
+        <header class="tcn-input-request-header">
+          <strong>${String(request.questions.length)} question${request.questions.length === 1 ? "" : "s"}</strong>
+          ${request.autoResolutionMs === undefined ? null : html`<small>Auto-resolves in ${formatDuration(request.autoResolutionMs)}</small>`}
+        </header>
+        <div class="tcn-question-list">
+          ${request.questions.map((question, index) => html`
+            <article class="tcn-question">
+              <div class="tcn-question-topline">
+                ${question.header === undefined ? null : html`<span class="tcn-question-header">${question.header}</span>`}
+                ${question.id === undefined ? null : html`<span class="tcn-question-id">${question.id}</span>`}
+                <span class="tcn-question-index">${String(index + 1)}</span>
+              </div>
+              <p class="tcn-question-text">${question.question}</p>
+              ${question.options.length === 0 ? null : html`
+                <ul class="tcn-option-list" aria-label="Options">
+                  ${question.options.map((option) => html`
+                    <li class="tcn-option">
+                      <span class="tcn-option-label">${option.label}</span>
+                      ${option.description === undefined || option.description === "" ? null : html`<span class="tcn-option-description">${option.description}</span>`}
+                    </li>
+                  `)}
+                </ul>
+              `}
+            </article>
+          `)}
+        </div>
+        ${request.metadataEntries.length === 0 ? null : html`
+          <div class="tcn-metadata" aria-label="Metadata">
+            ${request.metadataEntries.map(([key, value]) => html`
+              <span class="tcn-metadata-chip"><b>${key}</b><span>${shortDisplayValue(value)}</span></span>
+            `)}
+          </div>
+        `}
+      </section>
+      ${this.renderInlineOutput(output)}
+    `;
+  }
+
   private renderGenericToolDetails(args: unknown, output: string | undefined) {
     const parameters = args === undefined ? null : this.renderArgsSection(args);
     const inlineOutput = this.renderInlineOutput(output);
@@ -294,7 +370,7 @@ export class ToolCallNode extends LitElement {
     }
   }
 
-  static override styles = css`
+  static override styles = [activityShimmerStyles, css`
     :host { display: block; width: 100%; max-width: 100%; min-width: 0; color: var(--pi-text); }
 
     /* ── Root: no card, no border, no backdrop-filter ── */
@@ -303,49 +379,37 @@ export class ToolCallNode extends LitElement {
 
     /* ── One-liner summary ── */
     .tcn-summary {
-      display: flex; align-items: baseline; gap: 6px; min-width: 0;
+      display: flex; align-items: center; gap: 6px; min-width: 0;
       position: relative;
       overflow: hidden;
       cursor: pointer; user-select: none;
-      padding: 1px 0;
+      min-height: 36px;
+      box-sizing: border-box;
+      padding: 4px 0;
       font-size: 13px;
       line-height: 1.4;
       transition: background .15s ease, opacity .15s ease, filter .15s ease;
+      border: 0;
       border-radius: 4px;
+      background: transparent;
     }
     .tcn.pending .tcn-summary,
     .tcn.running .tcn-summary {
-      opacity: .72;
       filter: saturate(.9);
-    }
-    .tcn.pending .tcn-summary::after,
-    .tcn.running .tcn-summary::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      border-radius: inherit;
-      background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--pi-running, #8bb2ff) 16%, transparent) 48%, transparent 100%);
-      transform: translateX(-105%);
-      animation: tcn-row-scan 1.45s ease-in-out infinite;
     }
     .tcn.success .tcn-summary,
     .tcn.error .tcn-summary {
       opacity: 1;
       filter: none;
     }
-    @keyframes tcn-row-scan {
-      0% { transform: translateX(-105%); }
-      100% { transform: translateX(105%); }
-    }
-    .tcn-summary:hover { background: rgba(255, 255, 255, 0.03); }
-    .tcn-summary:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; border-radius: 4px; }
+    .tcn-summary:hover { background: color-mix(in srgb, var(--pi-surface-hover) 45%, transparent); }
+    .tcn-summary:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; }
 
     .tcn-name {
-      color: var(--pi-dim);
+      flex: 0 0 auto;
+      color: var(--activity-row-text);
       font-size: 13px;
       font-weight: 600;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     .tcn-sep { color: var(--pi-border-muted); flex: 0 0 auto; }
     .tcn-path {
@@ -363,13 +427,17 @@ export class ToolCallNode extends LitElement {
     .removed { color: color-mix(in srgb, #f87b7b 50%, var(--pi-muted)); }
     .sep { opacity: .4; }
     .tcn-edit-count { color: var(--pi-dim); font-size: 12px; }
+    .tcn-chevron { flex: 0 0 auto; margin-left: auto; color: var(--activity-row-text); font-size: 11px; opacity: .65; }
 
     /* ── Body: black-hole solid core ── */
     .tcn-body {
       display: grid; gap: 4px;
+      max-height: min(420px, 52vh);
+      overflow: auto;
+      margin-left: 3px;
+      padding: 4px 0 4px 13px;
+      border-left: 1px solid var(--pi-border-muted);
       background: transparent;
-      border-radius: 12px;
-      padding: 6px 10px;
     }
     .tcn.error .tcn-body {
     }
@@ -391,8 +459,8 @@ export class ToolCallNode extends LitElement {
     .tcn-command {
       display: grid;
       gap: 6px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.03);
+      border-radius: 0;
+      background: transparent;
       padding: 7px 9px;
       font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
@@ -433,6 +501,140 @@ export class ToolCallNode extends LitElement {
     .tcn-write-preview { display: grid; gap: 6px; border-top: 1px solid var(--pi-border-muted); padding-top: 6px; }
     .tcn-section-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--pi-muted); font-size: 12px; }
     .tcn-section-label small { color: var(--pi-dim); }
+
+    .tcn-input-request {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      padding: 3px 0;
+    }
+    .tcn-input-request-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      color: var(--pi-muted);
+      font-size: 12px;
+    }
+    .tcn-input-request-header strong {
+      color: var(--pi-text-secondary);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .tcn-input-request-header small {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--pi-dim);
+    }
+    .tcn-question-list {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .tcn-question {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      border-left: 1px solid var(--pi-border-muted);
+      padding-left: 10px;
+    }
+    .tcn-question-topline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--pi-dim);
+      font-size: 11px;
+    }
+    .tcn-question-header,
+    .tcn-question-id {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tcn-question-header {
+      color: var(--pi-text-secondary);
+      font-weight: 600;
+    }
+    .tcn-question-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .tcn-question-index {
+      flex: 0 0 auto;
+      margin-left: auto;
+      color: var(--pi-dim);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .tcn-question-text {
+      margin: 0;
+      color: var(--pi-text);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .tcn-option-list {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .tcn-option {
+      display: grid;
+      grid-template-columns: minmax(92px, 180px) minmax(0, 1fr);
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+      color: var(--pi-muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .tcn-option-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--pi-text-secondary);
+      font-weight: 600;
+    }
+    .tcn-option-description {
+      min-width: 0;
+      color: var(--pi-muted);
+      overflow-wrap: anywhere;
+    }
+    .tcn-metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+    }
+    .tcn-metadata-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      max-width: 100%;
+      border: 1px solid var(--pi-border-muted);
+      border-radius: 6px;
+      color: var(--pi-muted);
+      padding: 2px 6px;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .tcn-metadata-chip b {
+      flex: 0 0 auto;
+      color: var(--pi-dim);
+      font-weight: 600;
+    }
+    .tcn-metadata-chip span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     /* ── Args / Result / Diff ── */
     .tcn-args, .tcn-result, .tcn-diff { border-top: 1px solid var(--pi-border-muted); padding-top: 6px; }
@@ -485,10 +687,112 @@ export class ToolCallNode extends LitElement {
     .tcn-diff-block .meta { color: var(--pi-dim); }
     .tcn-diff-block .added { background: rgba(127, 209, 160, .06); }
     .tcn-diff-block .removed { background: rgba(248, 123, 123, .06); }
-  `;
+  `];
 }
 
 // ─── Utility functions (same logic as ToolCallCard, kept local) ──────
+
+interface UserInputRequest {
+  questions: UserInputQuestion[];
+  autoResolutionMs?: number;
+  metadataEntries: [string, unknown][];
+}
+
+interface UserInputQuestion {
+  question: string;
+  header?: string;
+  id?: string;
+  options: UserInputOption[];
+}
+
+interface UserInputOption {
+  label: string;
+  description?: string;
+}
+
+function isUserInputToolName(name: string): boolean {
+  return name === "request_user_input" || name.endsWith(".request_user_input");
+}
+
+function userInputRequestFromArgs(args: unknown): UserInputRequest | undefined {
+  if (!isRecord(args)) return undefined;
+  const questions = getProperty(args, "questions");
+  if (!Array.isArray(questions) || questions.length === 0) return undefined;
+  const parsedQuestions = questions.map(userInputQuestionFromValue).filter((question): question is UserInputQuestion => question !== undefined);
+  if (parsedQuestions.length === 0) return undefined;
+  const autoResolutionMs = getNumber(args, "autoResolutionMs");
+  const metadata = getProperty(args, "metadata");
+  const metadataEntries = isRecord(metadata) && !Array.isArray(metadata)
+    ? Object.entries(metadata).filter(([, value]) => value !== undefined && value !== null)
+    : [];
+  return {
+    questions: parsedQuestions,
+    ...(autoResolutionMs === undefined ? {} : { autoResolutionMs }),
+    metadataEntries,
+  };
+}
+
+function userInputRequestSummary(request: UserInputRequest | undefined): string | undefined {
+  const firstQuestion = request?.questions[0];
+  if (request === undefined || firstQuestion === undefined) return undefined;
+  return `Ask ${String(request.questions.length)} question${request.questions.length === 1 ? "" : "s"}: ${truncateInline(firstQuestion.question, 96)}`;
+}
+
+function userInputRequestStatusLabel(status: ToolExecutionPart["status"]): string {
+  return status === "success" || status === "error" ? "Requested input" : "Waiting for input";
+}
+
+function userInputQuestionFromValue(value: unknown): UserInputQuestion | undefined {
+  if (!isRecord(value)) return undefined;
+  const question = getString(value, "question");
+  if (question === undefined || question.trim() === "") return undefined;
+  const header = getString(value, "header");
+  const id = getString(value, "id");
+  const optionsValue = getProperty(value, "options");
+  const options = Array.isArray(optionsValue)
+    ? optionsValue.map(userInputOptionFromValue).filter((option): option is UserInputOption => option !== undefined)
+    : [];
+  return {
+    question,
+    ...(header === undefined || header === "" ? {} : { header }),
+    ...(id === undefined || id === "" ? {} : { id }),
+    options,
+  };
+}
+
+function userInputOptionFromValue(value: unknown): UserInputOption | undefined {
+  if (!isRecord(value)) return undefined;
+  const label = getString(value, "label");
+  if (label === undefined || label.trim() === "") return undefined;
+  const description = getString(value, "description");
+  return {
+    label,
+    ...(description === undefined || description === "" ? {} : { description }),
+  };
+}
+
+function formatDuration(milliseconds: number): string {
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "0s";
+  const seconds = Math.round(milliseconds / 1000);
+  if (seconds < 60) return `${String(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder === 0 ? `${String(minutes)}m` : `${String(minutes)}m ${String(remainder)}s`;
+}
+
+function shortDisplayValue(value: unknown): string {
+  if (typeof value === "string") return truncateInline(value, 80);
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  if (Array.isArray(value)) return `${String(value.length)} item${value.length === 1 ? "" : "s"}`;
+  if (isRecord(value)) return "object";
+  return String(value);
+}
+
+function truncateInline(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
+}
 
 function pathFromArgs(args: unknown): string | undefined {
   return getString(args, "path") ?? getString(args, "file_path");
@@ -496,6 +800,39 @@ function pathFromArgs(args: unknown): string | undefined {
 
 function commandFromArgs(args: unknown): string | undefined {
   return getString(args, "command") ?? getString(args, "cmd");
+}
+
+function toolSummaryLabel(toolName: string, status: ToolExecutionPart["status"], command: string | undefined): string {
+  if (toolName === "load_skill") return status === "success" ? "Loaded skill" : "Loading skill";
+  if (isUserInputToolName(toolName)) return status === "success" || status === "error" ? "Requested input" : "Waiting for input";
+  if (toolName === "read") return status === "success" ? "Read file" : "Reading files";
+  if (toolName === "edit" || toolName === "write" || toolName === "apply_patch") return status === "success" ? "Edited file" : "Editing files";
+  if (toolName === "grep" || toolName === "rg" || toolName === "glob") return status === "success" ? "Searched codebase" : "Searching codebase";
+  if (toolName === "web_search" || toolName === "fetch_content" || toolName === "search_query") return status === "success" ? "Searched sources" : "Searching sources";
+  if (toolName === "bash") {
+    if (command !== undefined && isTestCommand(command)) {
+      if (status === "success") return "Tests passed";
+      if (status === "error") return "Tests failed";
+      return "Running tests";
+    }
+    if (command !== undefined && isBuildCommand(command)) {
+      if (status === "success") return "Build passed";
+      if (status === "error") return "Build failed";
+      return "Running build";
+    }
+    return status === "success" || status === "error" ? "Ran command" : "Running command";
+  }
+  if (toolName === "browser" || toolName === "screenshot" || toolName === "open") return status === "success" ? "Opened browser preview" : "Opening browser preview";
+  if (toolName === "subagent") return status === "success" ? "Reviewed task" : "Reviewing task";
+  return status === "success" || status === "error" ? `Ran ${toolName}` : `Running ${toolName}`;
+}
+
+function isTestCommand(command: string): boolean {
+  return /\b(test|vitest|jest|playwright|pytest)\b|cargo\s+test|go\s+test|npm\s+(run\s+)?test|pnpm\s+(run\s+)?test|yarn\s+test/u.test(command);
+}
+
+function isBuildCommand(command: string): boolean {
+  return /\b(build|typecheck|lint)\b|npm\s+run\s+(build|typecheck|lint)|pnpm\s+(build|typecheck|lint)/u.test(command);
 }
 
 function newTextFromArgs(args: unknown): string | undefined {

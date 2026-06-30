@@ -76,12 +76,7 @@ export class MessageBubble extends LitElement {
       `;
     }
     if (part.type === "skillRead") {
-      return html`
-        <div class="part skill-read">
-          <strong>Loaded ${part.name}</strong>
-          <small>read ${part.path}</small>
-        </div>
-      `;
+      return html`<tool-call-node class="part" .aggregation=${{ skillRead: part }} .agentActive=${this.isLive}></tool-call-node>`;
     }
     if (part.type === "image") {
       return html`<img class="part chat-image" src=${`data:${part.mimeType};base64,${part.data}`} alt="attached image" loading="lazy" />`;
@@ -144,7 +139,7 @@ export class MessageBubble extends LitElement {
     .bubble.tool { color: var(--pi-warning); }
     .bubble.skill { background: var(--pi-purple-surface); }
     .avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: 0 0 auto; margin-top: 2px; }
-    .user-avatar { background: var(--pi-running-bg); color: var(--pi-accent); }
+    .user-avatar { background: color-mix(in srgb, var(--pi-text) 8%, transparent); color: var(--pi-text-secondary); }
     .assistant-avatar { background: rgba(255,255,255,0.03); color: var(--pi-text-secondary); }
     .system-avatar { background: var(--pi-danger-bg); color: var(--pi-danger); }
     .bash-avatar { background: var(--pi-success-bg); color: var(--pi-success); font-family: ui-monospace, monospace; }
@@ -156,9 +151,9 @@ export class MessageBubble extends LitElement {
     .tool-line { color: var(--pi-warning); font-size: 13px; }
     .summary { color: var(--pi-muted); margin-left: 6px; }
     .part:is(details) { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 4px; }
-    .skill-invocation, .skill-read { border: 1px solid var(--pi-border); border-radius: 8px; background: transparent; padding: 8px 10px; }
-    .skill-invocation > summary, .skill-read > strong { color: var(--pi-purple); }
-    .skill-invocation > small, .skill-read > small { display: block; margin: 6px 0 0; color: var(--pi-muted); }
+    .skill-invocation { border: 1px solid var(--pi-border); border-radius: 8px; background: transparent; padding: 8px 10px; }
+    .skill-invocation > summary { color: var(--pi-purple); }
+    .skill-invocation > small { display: block; margin: 6px 0 0; color: var(--pi-muted); }
     .thinking-section { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 8px; }
     .chat-image { display: block; max-width: 100%; max-height: 320px; margin: 4px 0 0; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; object-fit: contain; }
     formatted-text.part { display: block; }

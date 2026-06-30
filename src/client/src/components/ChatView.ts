@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, svg } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { ChatDisclosureController } from "../chatDisclosure";
 import { groupChatMessages, summarizeChatGroup, type ChatGroup } from "../chatGroups";
@@ -6,6 +6,8 @@ import { capturePrependScrollAnchor, PREPEND_RESTORE_SETTLE_FRAMES, restorePrepe
 import { shouldRequestEarlierMessages } from "../chatHistoryLoading";
 import { ChatScrollController, distanceFromScrollBottom, findFirstVisibleArticle, isNearScrollBottom, type ChatAnchorScrollPosition, type ChatScrollRestoreResult } from "../chatScrollPosition";
 import type { SessionActivity, SessionStatus } from "../api";
+import { buildSessionCompletionCards, type SessionCompletionArtifactCard, type SessionCompletionEditCard, type SessionCompletionFileRow } from "../sessionCompletionCards";
+import { buildSessionWorkSummary, type SessionWorkSummary } from "../sessionWorkSummary";
 import type { ChatLine, ChatPart } from "./shared";
 import { chatStyles } from "./shared";
 import { renderRoleIcon, roleIconStyles } from "./roleIcons";
@@ -68,6 +70,8 @@ export class ChatView extends LitElement {
   @property({ attribute: false }) status?: SessionStatus;
   @property({ attribute: false }) activity?: SessionActivity;
   @property({ attribute: false }) onLoadMore?: () => void;
+  @property({ attribute: false }) onOpenWorkspaceFile?: (path: string) => void;
+  @property({ attribute: false }) onReviewWorkspaceFile?: (path: string) => void;
   @query(".chat") private chat?: HTMLDivElement;
   @state() private pinnedToBottom = true;
   @state() private expandedMetaKey: string | undefined;
@@ -91,6 +95,7 @@ export class ChatView extends LitElement {
   private readonly messageCopyTextCache = new WeakMap<ChatLine, string>();
   private partialStreamNoticeBody: string | undefined;
   @state() private activityPhraseIndex = 0;
+  @state() private expandedCompletionFileLists: Record<string, true> = {};
   private activityPhraseTimer: number | undefined;
   private lastScrollTop = 0;
   private lastClientHeight = 0;
@@ -149,6 +154,7 @@ export class ChatView extends LitElement {
     this.pinnedToBottom = true;
     this.pendingScrollRestoreSessionId = undefined;
     this.pendingScrollRestorePosition = undefined;
+    this.expandedCompletionFileLists = {};
     this.prependRestoreToken += 1;
     if (this.restoreScrollFrame !== undefined) {
       cancelAnimationFrame(this.restoreScrollFrame);
@@ -194,8 +200,9 @@ export class ChatView extends LitElement {
 
   override render() {
     const nodes = this.computedTimelineNodes();
-    const assistantFooterKey = this.revealedAssistantFooterKey(nodes);
     const streamingNodeKey = this.streamingNodeKey(nodes);
+    const assistantFooterKeys = this.assistantFooterKeys(nodes, streamingNodeKey);
+    const responseSummaries = this.responseSummariesByAssistantKey(nodes, assistantFooterKeys);
     return html`
       <div class="chat-wrap">
         ${this.renderConversationRail()}
@@ -205,7 +212,7 @@ export class ChatView extends LitElement {
             ${nodes.map((node, index) => {
               const isStreamingNode = node.key === streamingNodeKey;
               if (!this.shouldRenderTimelineNode(node, isStreamingNode)) return null;
-              return this.renderTimelineNode(node, index, node.key === assistantFooterKey, isStreamingNode, undefined, this.stepSummaryReady(nodes, index));
+              return this.renderTimelineNode(node, index, assistantFooterKeys.has(node.key), isStreamingNode, this.stepSummaryReady(nodes, index), responseSummaries.get(node.key));
             })}
           </timeline-layout>
           ${this.renderQueuedMessages()}
@@ -309,6 +316,57 @@ export class ChatView extends LitElement {
     return undefined;
   }
 
+  private assistantFooterKeys(nodes: readonly TimelineNode[], streamingNodeKey: string | undefined): Set<string> {
+    const footerKeys = new Set<string>();
+    let latestAssistantKey: string | undefined;
+    for (const node of nodes) {
+      if (node.type === "user") {
+        this.addCompletedAssistantFooterKey(footerKeys, latestAssistantKey, streamingNodeKey);
+        latestAssistantKey = undefined;
+        continue;
+      }
+      if (node.type === "assistant") latestAssistantKey = node.key;
+    }
+    this.addCompletedAssistantFooterKey(footerKeys, latestAssistantKey, streamingNodeKey);
+    return footerKeys;
+  }
+
+  private addCompletedAssistantFooterKey(footerKeys: Set<string>, assistantKey: string | undefined, streamingNodeKey: string | undefined): void {
+    if (assistantKey === undefined) return;
+    if (assistantKey === streamingNodeKey && this.isSessionLive()) return;
+    footerKeys.add(assistantKey);
+  }
+
+  private responseSummariesByAssistantKey(nodes: readonly TimelineNode[], assistantFooterKeys: ReadonlySet<string>): Map<string, SessionWorkSummary> {
+    const summaries = new Map<string, SessionWorkSummary>();
+    let responseMessages: ChatLine[] = [];
+    for (const node of nodes) {
+      if (node.type === "user") {
+        responseMessages = [];
+        continue;
+      }
+      if (node.type === "assistant") {
+        if (assistantFooterKeys.has(node.key)) {
+          if (responseMessages.length > 0) summaries.set(node.key, buildSessionWorkSummary({ messages: responseMessages }));
+          responseMessages = [];
+        }
+        continue;
+      }
+      const message = this.responseMessageFromTimelineNode(node);
+      if (message !== undefined) responseMessages.push(message);
+    }
+    return summaries;
+  }
+
+  private responseMessageFromTimelineNode(node: TimelineNode): ChatLine | undefined {
+    if (node.parts.length === 0) return undefined;
+    if (node.type === "step" || node.type === "tool") return { role: "tool", parts: node.parts };
+    if (node.type === "bash") return { role: "bash", parts: node.parts };
+    if (node.type === "skill") return { role: "skill", parts: node.parts };
+    if (node.type === "error") return { role: "system", parts: node.parts };
+    return undefined;
+  }
+
   private shouldRenderTimelineNode(node: TimelineNode, isStreamingNode: boolean): boolean {
     if (node.type !== "step") return true;
     const step = node.step;
@@ -326,6 +384,7 @@ export class ChatView extends LitElement {
     if (agg.execution !== undefined) return agg.execution.status;
     if (agg.result !== undefined) return agg.result.isError ? "error" : "success";
     if (agg.toolCall !== undefined) return "pending";
+    if (agg.skillRead !== undefined) return "success";
     return "idle";
   }
 
@@ -340,7 +399,7 @@ export class ChatView extends LitElement {
     return false;
   }
 
-  private renderTimelineNode(node: TimelineNode, displayIndex: number, showAssistantFooter: boolean, isStreamingNode: boolean, completionSummary: string | undefined, stepSummaryReady: boolean) {
+  private renderTimelineNode(node: TimelineNode, displayIndex: number, showAssistantFooter: boolean, isStreamingNode: boolean, stepSummaryReady: boolean, responseSummary: SessionWorkSummary | undefined) {
     const isLive = this.isSessionLive();
     const nodeStatus: TimelineNodeStatus = node.status;
     return html`
@@ -352,19 +411,19 @@ export class ChatView extends LitElement {
         data-index=${String(displayIndex)}
         data-scroll-anchor-id=${node.key}
       >
-        ${this.renderTimelineNodeContent(node, showAssistantFooter, isStreamingNode, completionSummary, stepSummaryReady)}
+        ${this.renderTimelineNodeContent(node, showAssistantFooter, isStreamingNode, stepSummaryReady, isLive, responseSummary)}
       </timeline-node-wrapper>
     `;
   }
 
-  private renderTimelineNodeContent(node: TimelineNode, showAssistantFooter: boolean, isStreamingNode: boolean, completionSummary: string | undefined, stepSummaryReady: boolean) {
+  private renderTimelineNodeContent(node: TimelineNode, showAssistantFooter: boolean, isStreamingNode: boolean, stepSummaryReady: boolean, isLive: boolean, responseSummary: SessionWorkSummary | undefined) {
     switch (node.type) {
       case "user":
         return this.renderUserNode(node);
       case "assistant":
-        return this.renderAssistantNode(node, showAssistantFooter, isStreamingNode, completionSummary);
+        return this.renderAssistantNode(node, showAssistantFooter, isStreamingNode, responseSummary);
       case "tool":
-        return this.renderToolNode(node);
+        return this.renderToolNode(node, isLive);
       case "step":
         return this.renderStepNode(node, isStreamingNode, stepSummaryReady);
       case "error":
@@ -384,98 +443,224 @@ export class ChatView extends LitElement {
 
   private renderUserNode(node: TimelineNode) {
     const textPart = node.parts.find((p): p is Extract<ChatPart, { type: "text" }> => p.type === "text");
-    const meta = this.nodeMetaLabel(node);
     const key = node.key;
     return html`
       <div class="tl-user">
+        ${this.renderMessageTools(node, key)}
         ${textPart ? html`<formatted-text .text=${textPart.text}></formatted-text>` : null}
         ${this.renderNodeImages(node)}
-        <div class="tl-user-footer">
-          <div class="tl-header-trailing">
-            ${this.renderCopyAction(node, key)}
-            ${meta !== undefined ? html`<span class="tl-meta">${meta}</span>` : null}
-          </div>
-        </div>
       </div>
     `;
   }
 
-  private renderAssistantNode(node: TimelineNode, showFooter: boolean, streaming: boolean, completionSummary: string | undefined) {
+  private renderAssistantNode(node: TimelineNode, showFooter: boolean, streaming: boolean, responseSummary: SessionWorkSummary | undefined) {
     const textPart = node.parts.find((p): p is Extract<ChatPart, { type: "text" }> => p.type === "text");
-    const meta = this.nodeMetaLabel(node);
     const key = node.key;
     return html`
       <div class="tl-assistant">
-        ${completionSummary !== undefined ? html`<div class="tl-completion-summary"><span class="tl-completion-text">${completionSummary}</span></div>` : null}
+        ${this.renderMessageTools(node, key)}
         ${textPart ? html`<formatted-text .text=${textPart.text} .streaming=${streaming}></formatted-text>` : null}
         ${this.renderNodeImages(node)}
-        ${showFooter ? html`
-          <div class="tl-assistant-footer">
-            <div class="tl-header-trailing">
-              ${this.renderCopyAction(node, key)}
-              ${meta !== undefined ? html`<span class="tl-meta">${meta}</span>` : null}
-            </div>
-          </div>
-        ` : null}
+        ${this.renderAssistantCompletionCards(node.key, showFooter, responseSummary)}
       </div>
     `;
   }
 
-  private computeCompletionSummary(nodes: readonly TimelineNode[]): string | undefined {
-    const toolCounts = new Map<string, number>();
-    let hasSteps = false;
-    for (const node of nodes) {
-      if (node.type === "step" && node.step !== undefined) {
-        hasSteps = true;
-        for (const agg of node.step.tools) {
-          const name = agg.execution?.toolName ?? agg.toolCall?.toolName ?? agg.result?.toolName ?? "tool";
-          toolCounts.set(name, (toolCounts.get(name) ?? 0) + 1);
-        }
-      } else if (node.type === "tool" && node.tool !== undefined) {
-        hasSteps = true;
-        const name = node.tool.execution?.toolName ?? node.tool.toolCall?.toolName ?? node.tool.result?.toolName ?? "tool";
-        toolCounts.set(name, (toolCounts.get(name) ?? 0) + 1);
-      }
-    }
-    if (!hasSteps || toolCounts.size === 0) return undefined;
-
-    const parts: string[] = ["Completed"];
-
-    const readCount = toolCounts.get("read") ?? 0;
-    if (readCount > 0) parts.push(`Read ${String(readCount)} file${readCount === 1 ? "" : "s"}`);
-
-    const editCount = (toolCounts.get("edit") ?? 0) + (toolCounts.get("write") ?? 0);
-    if (editCount > 0) parts.push(`Edited ${String(editCount)} file${editCount === 1 ? "" : "s"}`);
-
-    const bashCount = toolCounts.get("bash") ?? 0;
-    if (bashCount > 0) parts.push(`Ran ${String(bashCount)} command${bashCount === 1 ? "" : "s"}`);
-
-    const searchCount = (toolCounts.get("web_search") ?? 0) + (toolCounts.get("fetch_content") ?? 0);
-    if (searchCount > 0) parts.push(`Searched ${String(searchCount)} site${searchCount === 1 ? "" : "s"}`);
-
-    const known = new Set(["read", "edit", "write", "bash", "web_search", "fetch_content", "glob", "grep"]);
-    const otherCount = [...toolCounts.entries()]
-      .filter(([name]) => !known.has(name))
-      .reduce((sum, [, count]) => sum + count, 0);
-    if (otherCount > 0) parts.push(`${String(otherCount)} other`);
-
-    return parts.join(" · ");
+  private renderAssistantCompletionCards(nodeKey: string, showFooter: boolean, responseSummary: SessionWorkSummary | undefined) {
+    if (!showFooter || responseSummary === undefined) return null;
+    const expanded = this.expandedCompletionFileLists[nodeKey] === true;
+    const cards = buildSessionCompletionCards(responseSummary, expanded ? Number.MAX_SAFE_INTEGER : 3);
+    if (cards.artifact === undefined && cards.edits === undefined) return null;
+    return html`
+      <div class="tl-work-cards" aria-label="Work summary">
+        ${cards.artifact === undefined ? null : this.renderArtifactCard(cards.artifact)}
+        ${cards.edits === undefined ? null : this.renderEditCard(nodeKey, cards.edits)}
+      </div>
+    `;
   }
 
-  private renderCopyAction(node: TimelineNode, key: string) {
-    const text = node.parts
+  private renderArtifactCard(card: SessionCompletionArtifactCard) {
+    return html`
+      <section class="tl-artifact-card" aria-label=${card.title}>
+        <span class="tl-work-icon" aria-hidden="true">${this.renderDocumentIcon()}</span>
+        <span class="tl-work-card-copy">
+          <strong>${card.title}</strong>
+          <small>${card.subtitle}</small>
+        </span>
+        <button class="tl-work-action" type="button" ?disabled=${this.onOpenWorkspaceFile === undefined} @click=${() => { this.onOpenWorkspaceFile?.(card.path); }}>
+          <span>Open in</span>
+          ${this.renderChevronDownIcon()}
+        </button>
+      </section>
+    `;
+  }
+
+  private renderEditCard(nodeKey: string, card: SessionCompletionEditCard) {
+    const reviewPath = card.visibleFiles[0]?.path;
+    const expanded = this.expandedCompletionFileLists[nodeKey] === true;
+    return html`
+      <section class="tl-edit-card" aria-label=${card.title}>
+        <header class="tl-edit-card-header">
+          <span class="tl-work-icon" aria-hidden="true">${this.renderEditedFilesIcon()}</span>
+          <span class="tl-work-card-copy">
+            <strong>${card.title}</strong>
+            ${this.renderStats(card.added, card.removed)}
+          </span>
+          ${reviewPath === undefined ? null : html`
+            <button class="tl-work-action" type="button" ?disabled=${this.onReviewWorkspaceFile === undefined} @click=${() => { this.onReviewWorkspaceFile?.(reviewPath); }}>Review</button>
+          `}
+        </header>
+        <ul class="tl-edit-file-list">
+          ${card.visibleFiles.map((file) => this.renderChangedFileRow(file))}
+        </ul>
+        ${card.hiddenFileCount > 0 ? html`
+          <button class="tl-show-more-files" type="button" @click=${() => { this.setCompletionFilesExpanded(nodeKey, true); }}>
+            <span>Show ${String(card.hiddenFileCount)} more ${card.hiddenFileCount === 1 ? "file" : "files"}</span>
+            ${this.renderChevronDownIcon()}
+          </button>
+        ` : expanded ? html`
+          <button class="tl-show-more-files" type="button" @click=${() => { this.setCompletionFilesExpanded(nodeKey, false); }}>
+            <span>Show fewer files</span>
+            ${this.renderChevronUpIcon()}
+          </button>
+        ` : null}
+      </section>
+    `;
+  }
+
+  private setCompletionFilesExpanded(nodeKey: string, expanded: boolean): void {
+    if (expanded) {
+      this.expandedCompletionFileLists = { ...this.expandedCompletionFileLists, [nodeKey]: true };
+      return;
+    }
+    this.expandedCompletionFileLists = Object.fromEntries(
+      Object.entries(this.expandedCompletionFileLists).filter(([key]) => key !== nodeKey),
+    );
+  }
+
+  private renderChangedFileRow(file: SessionCompletionFileRow) {
+    const content = html`
+      <span class="tl-edit-file-path">${file.path}</span>
+      ${this.renderStats(file.added, file.removed)}
+    `;
+    if (this.onReviewWorkspaceFile === undefined) return html`<li class="tl-edit-file-row">${content}</li>`;
+    return html`
+      <li>
+        <button class="tl-edit-file-row tl-edit-file-button" type="button" @click=${() => { this.onReviewWorkspaceFile?.(file.path); }}>${content}</button>
+      </li>
+    `;
+  }
+
+  private renderStats(added: number | undefined, removed: number | undefined) {
+    if (added === undefined && removed === undefined) return null;
+    return html`
+      <span class="tl-diff-stats" aria-label=${`${String(added ?? 0)} added, ${String(removed ?? 0)} removed`}>
+        <span class="tl-added">+${String(added ?? 0)}</span>
+        <span class="tl-removed">-${String(removed ?? 0)}</span>
+      </span>
+    `;
+  }
+
+  private renderDocumentIcon() {
+    return svg`
+      <svg class="tl-work-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+        <path d="M14 3v5h5"></path>
+        <path d="M8.5 12h7"></path>
+        <path d="M8.5 16h5"></path>
+      </svg>
+    `;
+  }
+
+  private renderEditedFilesIcon() {
+    return svg`
+      <svg class="tl-work-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M6 3h9l3 3v15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+        <path d="M15 3v4h4"></path>
+        <path d="M12 10v7"></path>
+        <path d="M8.5 13.5h7"></path>
+      </svg>
+    `;
+  }
+
+  private renderChevronDownIcon() {
+    return svg`
+      <svg class="tl-action-svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="m4 6 4 4 4-4"></path>
+      </svg>
+    `;
+  }
+
+  private renderChevronUpIcon() {
+    return svg`
+      <svg class="tl-action-svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="m4 10 4-4 4 4"></path>
+      </svg>
+    `;
+  }
+
+  private renderMessageTools(node: TimelineNode, key: string) {
+    const text = this.nodeCopyText(node);
+    const meta = this.nodeMetaLabel(node);
+    if (text === "" && meta === undefined) return null;
+    return html`
+      <div class="tl-message-tools" aria-label="Message actions">
+        ${text === "" ? null : this.renderCopyAction(text, key)}
+        ${meta === undefined ? null : this.renderMetaInfo(meta)}
+      </div>
+    `;
+  }
+
+  private nodeCopyText(node: TimelineNode): string {
+    return node.parts
       .filter((p): p is Extract<ChatPart, { type: "text" }> => p.type === "text")
       .map((p) => p.text.trim())
       .filter((t) => t !== "")
       .join("\n\n");
+  }
+
+  private renderCopyAction(text: string, key: string) {
     if (text === "") return null;
     const copied = this.copiedMessageKey === key;
     return html`
-      <div class="tl-copy-action" aria-label="Copy message">
-        <button type="button" class="tl-copy-btn" title=${copied ? "Copied" : "Copy message"} @click=${(event: MouseEvent) => { void this.copyNodeText(text, key, event); }}>
-          <span aria-hidden="true">${copied ? "✓" : "⧉"}</span>
-        </button>
-      </div>
+      <button type="button" class="tl-tool-btn" title=${copied ? "Copied" : "Copy message"} aria-label=${copied ? "Copied" : "Copy message"} @click=${(event: MouseEvent) => { void this.copyNodeText(text, key, event); }}>
+        ${copied ? this.renderCheckIcon() : this.renderCopyIcon()}
+      </button>
+    `;
+  }
+
+  private renderMetaInfo(meta: string) {
+    return html`
+      <span class="tl-meta-info" tabindex="0" title=${meta} aria-label=${`Message details: ${meta}`}>
+        ${this.renderInfoIcon()}
+      </span>
+    `;
+  }
+
+  private renderCopyIcon() {
+    return svg`
+      <svg class="tl-tool-svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <rect x="6" y="5" width="7" height="8" rx="1.4"></rect>
+        <path d="M4 10H3.4A1.4 1.4 0 0 1 2 8.6V3.4A1.4 1.4 0 0 1 3.4 2h5.2A1.4 1.4 0 0 1 10 3.4V4"></path>
+      </svg>
+    `;
+  }
+
+  private renderCheckIcon() {
+    return svg`
+      <svg class="tl-tool-svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="m3.5 8.5 3 3 6-7"></path>
+      </svg>
+    `;
+  }
+
+  private renderInfoIcon() {
+    return svg`
+      <svg class="tl-tool-svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <circle cx="8" cy="8" r="5.5"></circle>
+        <path d="M8 7.2v3.6"></path>
+        <path d="M8 5.1h.01"></path>
+      </svg>
     `;
   }
 
@@ -489,10 +674,10 @@ export class ChatView extends LitElement {
     }, 1200);
   }
 
-  private renderToolNode(node: TimelineNode) {
+  private renderToolNode(node: TimelineNode, agentActive: boolean) {
     const agg = node.tool;
     if (agg) {
-      return html`<tool-call-node .aggregation=${agg}></tool-call-node>`;
+      return html`<tool-call-node .aggregation=${agg} .agentActive=${agentActive}></tool-call-node>`;
     }
     return null;
   }
@@ -534,12 +719,7 @@ export class ChatView extends LitElement {
       `;
     }
     if (part.type === "skillRead") {
-      return html`
-        <div class="part skill-read">
-          <strong>Loaded ${part.name}</strong>
-          <small>read ${part.path}</small>
-        </div>
-      `;
+      return html`<tool-call-node .aggregation=${{ skillRead: part }} .agentActive=${this.isSessionLive()}></tool-call-node>`;
     }
     return null;
   }
@@ -568,14 +748,14 @@ export class ChatView extends LitElement {
     const parts: string[] = [];
     if (meta.timestamp !== undefined && meta.timestamp !== "") {
       const date = new Date(meta.timestamp);
-      if (Number.isFinite(date.getTime())) parts.push(shortTimestampFormatter.format(date));
+      if (Number.isFinite(date.getTime())) parts.push(fullTimestampFormatter.format(date));
     }
     if (meta.model !== undefined) {
       const id = meta.model.responseId ?? meta.model.id;
       if (id !== undefined && id !== "") {
-        parts.push(meta.model.provider !== undefined && meta.model.provider !== "" ? `${meta.model.provider}/${id}` : id);
+        parts.push(meta.model.provider !== undefined && meta.model.provider !== "" ? `Model: ${meta.model.provider}/${id}` : `Model: ${id}`);
       } else if (meta.model.provider !== undefined && meta.model.provider !== "") {
-        parts.push(meta.model.provider);
+        parts.push(`Model: ${meta.model.provider}`);
       }
     }
     return parts.length > 0 ? parts.join(" · ") : undefined;
@@ -903,16 +1083,11 @@ export class ChatView extends LitElement {
         <formatted-text .text=${part.content}></formatted-text>
       </collapsible-section>
     `;
-    if (part.type === "skillRead") return html`
-      <div class="part skill-read">
-        <strong>Loaded ${part.name}</strong>
-        <small>read ${part.path}</small>
-      </div>
-    `;
+    if (part.type === "skillRead") return html`<tool-call-node class="part" .aggregation=${{ skillRead: part }} .agentActive=${this.isSessionLive()}></tool-call-node>`;
     if (part.type === "image") return html`<img class="part chat-image" src=${`data:${part.mimeType};base64,${part.data}`} alt="attached image" loading="lazy" />`;
     // Compact tool call — single line, expandable
-    if (part.type === "toolCall") return html`<tool-call-node class="part" .aggregation=${{ toolCall: part }}></tool-call-node>`;
-    if (part.type === "toolExecution") return html`<tool-call-node class="part" .aggregation=${{ execution: part }}></tool-call-node>`;
+    if (part.type === "toolCall") return html`<tool-call-node class="part" .aggregation=${{ toolCall: part }} .agentActive=${this.isSessionLive()}></tool-call-node>`;
+    if (part.type === "toolExecution") return html`<tool-call-node class="part" .aggregation=${{ execution: part }} .agentActive=${this.isSessionLive()}></tool-call-node>`;
     // Compact tool result — single status line
     if (part.type === "toolResult") return html`
       <div class="part tool-result-line ${part.isError ? "error" : "success"}">
