@@ -274,7 +274,26 @@ export type ThemeToken =
   | "--pi-glass-blur"
   | "--pi-solid-bg"
   | "--pi-solid-bg-strong"
-  | "--pi-danger-bg";
+  | "--pi-danger-bg"
+  | "--pi-panel-bg"
+  | "--pi-panel-border"
+  | "--pi-hover-overlay"
+  | "--pi-hover-overlay-strong"
+  | "--pi-elevated-bg"
+  | "--pi-elevated-border"
+  | "--pi-inset-highlight"
+  | "--pi-backdrop"
+  | "--pi-main-bg"
+  | "--pi-user-message-bg"
+  | "--pi-user-message-text"
+  | "--pi-code-bg"
+  | "--pi-diff-added-bg"
+  | "--pi-diff-added-border"
+  | "--pi-diff-removed-bg"
+  | "--pi-diff-removed-border"
+  | "--pi-info"
+  | "--pi-info-bg"
+  | "--pi-info-border";
 
 export type ThemeTokens = Record<ThemeToken, string>;
 

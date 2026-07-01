@@ -49,6 +49,25 @@ const tokens = {
   "--pi-solid-bg": "#000000",
   "--pi-solid-bg-strong": "#000000",
   "--pi-danger-bg": "#000000",
+  "--pi-diff-removed-border": "#000000",
+  "--pi-info": "#000000",
+  "--pi-info-bg": "#000000",
+  "--pi-info-border": "#000000",
+  "--pi-diff-removed-bg": "#000000",
+  "--pi-diff-added-border": "#000000",
+  "--pi-diff-added-bg": "#000000",
+  "--pi-code-bg": "#000000",
+  "--pi-user-message-text": "#000000",
+  "--pi-user-message-bg": "#000000",
+  "--pi-main-bg": "#000000",
+  "--pi-backdrop": "#000000",
+  "--pi-inset-highlight": "#000000",
+  "--pi-elevated-border": "#000000",
+  "--pi-elevated-bg": "#000000",
+  "--pi-hover-overlay-strong": "#000000",
+  "--pi-hover-overlay": "#000000",
+  "--pi-panel-border": "#000000",
+  "--pi-panel-bg": "#000000",
 } satisfies ThemeTokens;
 
 const themes = [
@@ -58,6 +77,7 @@ const themes = [
   theme("ayu-dark", "Ayu Dark", "dark"),
   theme("tokyo-night", "Tokyo Night", "dark"),
   theme("nord", "Nord", "dark"),
+  theme("dracula", "Dracula", "dark"),
   theme("classic", "PI WEB Classic", "dark"),
 ];
 
