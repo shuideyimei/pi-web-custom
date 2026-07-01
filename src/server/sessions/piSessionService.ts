@@ -34,6 +34,7 @@ import type { SavedPromptAttachment } from "../../shared/apiTypes.js";
 
 import { cwdPathsEqual } from "../workingDirectory.js";
 import type { WorkspaceActivityService } from "../activity/workspaceActivityService.js";
+import { createRequestUserInputToolDefinition } from "./requestUserInputTool.js";
 import { createSpawnSessionToolDefinition, type SpawnSessionInvocation, type SpawnSessionResult } from "./spawnSessionTool.js";
 import { createSubsessionToolDefinitions, type SpawnSubsessionInvocation, type SpawnSubsessionResult, type SubsessionCheckResult, type SubsessionReadQuery, type SubsessionReadResult, type SubsessionStatus, type SubsessionSummary, type SubsessionToolDeps } from "./spawnSubsessionTool.js";
 import { buildTranscriptView } from "./subsessionTranscript.js";
@@ -265,6 +266,7 @@ function createDefaultRuntimeFactory(authStorage: AuthStorage, modelRegistry: Mo
     const services = await createAgentSessionServices({ cwd, agentDir, authStorage, modelRegistry });
     const customTools = [
       createPiWebEditToolDefinition(cwd),
+      createRequestUserInputToolDefinition(),
       ...(spawn === undefined ? [] : [createSpawnSessionToolDefinition(cwd, { spawn })]),
       ...(subsessions === undefined ? [] : createSubsessionToolDefinitions(cwd, subsessions)),
     ];
@@ -1102,6 +1104,7 @@ export class PiSessionService {
     const sessionId = active.runtime.session.sessionId;
     this.clearCompactionPromptQueue(sessionId);
     clearSessionQueue(active.runtime.session);
+    this.extensionUis.get(sessionId)?.cancelAllDialogs();
     await active.runtime.session.abort();
     this.publishActivity(active.runtime.session, "stopped", "idle");
     this.publishStatus(active.runtime.session);
