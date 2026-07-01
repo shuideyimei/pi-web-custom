@@ -75,7 +75,7 @@ export const appStyles = css`
   @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
     :host { --pi-app-safe-area-bottom: env(safe-area-inset-bottom); }
   }
-  .shell { --navigation-panel-size: 340px; --workspace-panel-size: minmax(360px, 42vw); --navigation-panel-width: var(--navigation-panel-size); --workspace-panel-width: var(--workspace-panel-size); position: relative; z-index: 1; display: grid; grid-template-columns: var(--navigation-panel-width) 1px minmax(320px, 1fr) 1px var(--workspace-panel-width); height: 100%; min-height: 0; }
+  .shell { --navigation-panel-size: 340px; --workspace-panel-size: minmax(360px, 42vw); --navigation-panel-width: var(--navigation-panel-size); --workspace-panel-width: var(--workspace-panel-size); position: relative; z-index: 1; display: grid; grid-template-columns: var(--navigation-panel-width) 1px minmax(320px, 1fr) 1px var(--workspace-panel-width); grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
   aside { grid-column: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background:
     linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.06) 45%, rgba(255,255,255,0.02) 100%);
     backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05);
@@ -94,6 +94,7 @@ export const appStyles = css`
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    overflow: hidden;
     background: #090d14;
   }
   :host([data-color-scheme="light"]) main { background: #f7f9fc; }
