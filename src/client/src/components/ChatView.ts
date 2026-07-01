@@ -871,11 +871,7 @@ export class ChatView extends LitElement {
   }
 
   private renderConversationRail() {
-    if (!this.messages.length || this.messageTotal <= 0) return null;
-    const total = this.conversationDisplayTotal();
-    const position = this.conversationPositionPercent(total);
-    const loadedPercent = this.hasMore ? clampPercent((this.messages.length / total) * 100) : 100;
-    return html`<conversation-meter .positionPercent=${position} .loadedPercent=${loadedPercent} @conversation-meter-seek=${this.onConversationMeterSeek}></conversation-meter>`;
+    return null;
   }
 
   private conversationDisplayTotal(): number {
