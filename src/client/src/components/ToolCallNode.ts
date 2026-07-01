@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { activityShimmerStyles } from "./activityShimmerStyles";
 import type { ToolAggregation } from "./timelineAdapter";
 import type { ChatPart, ToolExecutionPart } from "./shared";
+import { inputRequestFromArgs, type SessionInputRequest } from "../sessionInputRequests";
 import "./SubagentToolDetails";
 
 const MAX_COLLAPSED_RESULT_LINES = 8;
@@ -44,9 +45,9 @@ export class ToolCallNode extends LitElement {
     const toolName = skillRead !== undefined ? "load_skill" : execution?.toolName ?? toolCall?.toolName ?? result?.toolName ?? "tool";
     const status: ToolExecutionPart["status"] = skillRead !== undefined ? "success" : execution?.status ?? (result?.isError === true ? "error" : result !== undefined ? "success" : "pending");
     const args = skillRead !== undefined ? { name: skillRead.name, path: skillRead.path } : execution?.args ?? toolCall?.args;
-    const inputRequest = userInputRequestFromArgs(args);
+    const inputRequest = inputRequestFromArgs(args);
     const command = toolName === "bash" ? commandFromArgs(args) : undefined;
-    const summary = skillRead?.name ?? command ?? execution?.summary ?? toolCall?.summary ?? userInputRequestSummary(inputRequest) ?? "";
+    const summary = skillRead?.name ?? command ?? userInputRequestSummary(inputRequest) ?? execution?.summary ?? toolCall?.summary ?? "";
     const filePath = skillRead?.path ?? pathFromArgs(args);
     const actualDiff = execution === undefined ? undefined : diffFromDetails(execution.details);
     const preview = execution?.preview;
@@ -90,7 +91,7 @@ export class ToolCallNode extends LitElement {
               </div>
             `}
             ${this.renderToolDetails(toolName, args, status, visibleDiff, actualDiff === undefined ? "Preview diff" : "Applied diff", bodyText)}
-            ${toolName !== "bash" && toolName !== "edit" && toolName !== "write" && visibleDiff === undefined && (bodyText === undefined || bodyText === "")
+            ${inputRequest === undefined && toolName !== "bash" && toolName !== "edit" && toolName !== "write" && visibleDiff === undefined && (bodyText === undefined || bodyText === "")
               ? html`<p class="tcn-muted">${summary}</p>` : null}
           </div>
         ` : null}
@@ -116,7 +117,7 @@ export class ToolCallNode extends LitElement {
     if (toolName === "bash") return this.renderBashCommand(args, bodyText);
     if (toolName === "read") return this.renderReadDetails(args, bodyText);
     if (toolName === "edit" || toolName === "write") return this.renderFileChangeDetails(toolName, args, visibleDiff, diffLabel, bodyText);
-    if (isUserInputToolName(toolName) || userInputRequestFromArgs(args) !== undefined) return this.renderUserInputRequestDetails(args, bodyText);
+    if (isUserInputToolName(toolName) || inputRequestFromArgs(args) !== undefined) return this.renderUserInputRequestDetails(args, bodyText);
     if (visibleDiff !== undefined) return this.renderDiffBody(visibleDiff, diffLabel);
     return this.renderGenericToolDetails(args, bodyText);
   }
@@ -242,7 +243,7 @@ export class ToolCallNode extends LitElement {
   }
 
   private renderUserInputRequestDetails(args: unknown, output: string | undefined) {
-    const request = userInputRequestFromArgs(args);
+    const request = inputRequestFromArgs(args);
     if (request === undefined) return this.renderGenericToolDetails(args, output);
     return html`
       <section class="tcn-input-request" aria-label="Input request parameters">
@@ -692,47 +693,11 @@ export class ToolCallNode extends LitElement {
 
 // ─── Utility functions (same logic as ToolCallCard, kept local) ──────
 
-interface UserInputRequest {
-  questions: UserInputQuestion[];
-  autoResolutionMs?: number;
-  metadataEntries: [string, unknown][];
-}
-
-interface UserInputQuestion {
-  question: string;
-  header?: string;
-  id?: string;
-  options: UserInputOption[];
-}
-
-interface UserInputOption {
-  label: string;
-  description?: string;
-}
-
 function isUserInputToolName(name: string): boolean {
   return name === "request_user_input" || name.endsWith(".request_user_input");
 }
 
-function userInputRequestFromArgs(args: unknown): UserInputRequest | undefined {
-  if (!isRecord(args)) return undefined;
-  const questions = getProperty(args, "questions");
-  if (!Array.isArray(questions) || questions.length === 0) return undefined;
-  const parsedQuestions = questions.map(userInputQuestionFromValue).filter((question): question is UserInputQuestion => question !== undefined);
-  if (parsedQuestions.length === 0) return undefined;
-  const autoResolutionMs = getNumber(args, "autoResolutionMs");
-  const metadata = getProperty(args, "metadata");
-  const metadataEntries = isRecord(metadata) && !Array.isArray(metadata)
-    ? Object.entries(metadata).filter(([, value]) => value !== undefined && value !== null)
-    : [];
-  return {
-    questions: parsedQuestions,
-    ...(autoResolutionMs === undefined ? {} : { autoResolutionMs }),
-    metadataEntries,
-  };
-}
-
-function userInputRequestSummary(request: UserInputRequest | undefined): string | undefined {
+function userInputRequestSummary(request: SessionInputRequest | undefined): string | undefined {
   const firstQuestion = request?.questions[0];
   if (request === undefined || firstQuestion === undefined) return undefined;
   return `Ask ${String(request.questions.length)} question${request.questions.length === 1 ? "" : "s"}: ${truncateInline(firstQuestion.question, 96)}`;
@@ -740,35 +705,6 @@ function userInputRequestSummary(request: UserInputRequest | undefined): string 
 
 function userInputRequestStatusLabel(status: ToolExecutionPart["status"]): string {
   return status === "success" || status === "error" ? "Requested input" : "Waiting for input";
-}
-
-function userInputQuestionFromValue(value: unknown): UserInputQuestion | undefined {
-  if (!isRecord(value)) return undefined;
-  const question = getString(value, "question");
-  if (question === undefined || question.trim() === "") return undefined;
-  const header = getString(value, "header");
-  const id = getString(value, "id");
-  const optionsValue = getProperty(value, "options");
-  const options = Array.isArray(optionsValue)
-    ? optionsValue.map(userInputOptionFromValue).filter((option): option is UserInputOption => option !== undefined)
-    : [];
-  return {
-    question,
-    ...(header === undefined || header === "" ? {} : { header }),
-    ...(id === undefined || id === "" ? {} : { id }),
-    options,
-  };
-}
-
-function userInputOptionFromValue(value: unknown): UserInputOption | undefined {
-  if (!isRecord(value)) return undefined;
-  const label = getString(value, "label");
-  if (label === undefined || label.trim() === "") return undefined;
-  const description = getString(value, "description");
-  return {
-    label,
-    ...(description === undefined || description === "" ? {} : { description }),
-  };
 }
 
 function formatDuration(milliseconds: number): string {

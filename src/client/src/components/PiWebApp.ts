@@ -36,6 +36,7 @@ import { readSettingsSection, writeSettingsSection, type SettingsSection } from 
 import { applyActiveShortcutPreferences } from "../shortcutPreferences";
 import { isWebSlashCommandName, parseSlashCommandInput, settingsSectionFromSlashArgument, slashCommandArguments } from "../slashCommands";
 import { createTerminalCommandRunsRuntime } from "../runtime/terminalRuntime";
+import { pendingInputRequestFromMessages, type SessionInputQuestion } from "../sessionInputRequests";
 import { isWorkspaceDeletionPending, isWorkspaceDeletionRunPending, latestWorkspaceDeletionRuns, pendingWorkspaceDeletionIds, targetWorkspaceIdForRun, workspaceDeletionRunFilter } from "../workspaceDeletion";
 import "./MachineList";
 import "./ProjectList";
@@ -51,6 +52,7 @@ import "./ActionPalette";
 import "./AuthDialog";
 import "./ProjectDialog";
 import "./MachineDialog";
+import "./InputRequestDialog";
 import type { MachineDialogSubmit } from "./MachineDialog";
 import "./SettingsDialog";
 import "./WorkspacePanel";
@@ -1752,6 +1754,20 @@ export class PiWebApp extends LitElement {
     void this.routePrompt(text, streamingBehavior, attachments, delivery);
   }
 
+  private async answerFallbackInputRequest(answer: string, question: SessionInputQuestion): Promise<void> {
+    await this.sessions.stopActiveWork();
+    await this.sessions.send(`Answer to pending input request:\n\nQ: ${question.question}\nA: ${answer}`);
+  }
+
+  private respondToExtensionOverlay(requestId: string, value: string): void {
+    if (this.state.extensionOverlay?.requestId === requestId) this.setState({ extensionOverlay: undefined });
+    void this.sessions.respondToCommand(requestId, value);
+  }
+
+  private sendExtensionOverlayInput(requestId: string, data: string): void {
+    void this.sessions.respondToCommand(requestId, `${EXTENSION_OVERLAY_KEY_PREFIX}${encodeURIComponent(data)}`);
+  }
+
   private async routePrompt(text: string, streamingBehavior?: "steer" | "followUp", attachments?: import("../api").PromptAttachment[], delivery?: import("../../../shared/apiTypes").PromptAttachmentDelivery): Promise<void> {
     const hasAttachments = attachments !== undefined && attachments.length > 0;
     if (!hasAttachments && await this.handleWebSlashCommand(text)) return;
@@ -1909,6 +1925,9 @@ export class PiWebApp extends LitElement {
 
   override render() {
     const state = this.state;
+    const sessionActive = isSessionActive(state.status, state.activity);
+    const pendingInputRequest = pendingInputRequestFromMessages(state.messages, { active: sessionActive || state.extensionOverlay !== undefined });
+    const canStopSession = sessionActive || state.extensionOverlay !== undefined || pendingInputRequest !== undefined;
     return html`
       <div class=${this.panelCollapse.shellClass(state.mainView)} style=${this.panelResize.shellStyle({ navigation: this.resizablePanelConstraints("navigation"), workspace: this.resizablePanelConstraints("workspace") })}>
         <aside id="navigation-panel">${this.appShell.isMobileNavigationLayout ? null : this.renderNavigationPanel()}</aside>
@@ -1920,13 +1939,14 @@ export class PiWebApp extends LitElement {
           <div class="mobile-navigation-panel">${this.appShell.isMobileNavigationLayout ? this.renderNavigationPanel() : null}</div>
           ${state.selectedSession ? html`
             <chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string) => { void this.git.selectDiff(path); }}></chat-view>
-            <prompt-editor .sessionId=${state.selectedSession.id} .cwd=${state.selectedWorkspace?.path} .machineId=${selectedMachineId(state)} .projectId=${state.selectedWorkspace?.projectId} .workspaceId=${state.selectedWorkspace?.id} .workspaceScopedFileSuggestions=${this.supportsWorkspaceFileSuggestions()} .disabled=${state.selectedSession.archived === true} .canSteer=${state.status?.isStreaming === true} .isCompacting=${state.status?.isCompacting === true} .canStop=${state.status?.isStreaming === true || state.status?.isBashRunning === true || state.status?.isCompacting === true || (state.status?.pendingMessageCount ?? 0) > 0} .status=${state.status} .availableThinkingLevels=${state.availableThinkingLevels} .sending=${state.sendingPrompts[state.selectedSession.id] === true} .onSend=${(text: string, streamingBehavior?: "steer" | "followUp", attachments?: import("../api").PromptAttachment[], delivery?: import("../../../shared/apiTypes").PromptAttachmentDelivery) => { this.sendPrompt(text, streamingBehavior, attachments, delivery); }} .onStop=${() => this.sessions.stopActiveWork()} .onSelectModel=${() => { void this.openModelDialog(); }} .onSelectThinking=${() => { void this.openThinkingDialog(); }}></prompt-editor>
+            <prompt-editor .sessionId=${state.selectedSession.id} .cwd=${state.selectedWorkspace?.path} .machineId=${selectedMachineId(state)} .projectId=${state.selectedWorkspace?.projectId} .workspaceId=${state.selectedWorkspace?.id} .workspaceScopedFileSuggestions=${this.supportsWorkspaceFileSuggestions()} .disabled=${state.selectedSession.archived === true} .canSteer=${state.status?.isStreaming === true} .isCompacting=${state.status?.isCompacting === true} .canStop=${canStopSession} .status=${state.status} .availableThinkingLevels=${state.availableThinkingLevels} .sending=${state.sendingPrompts[state.selectedSession.id] === true} .onSend=${(text: string, streamingBehavior?: "steer" | "followUp", attachments?: import("../api").PromptAttachment[], delivery?: import("../../../shared/apiTypes").PromptAttachmentDelivery) => { this.sendPrompt(text, streamingBehavior, attachments, delivery); }} .onStop=${() => this.sessions.stopActiveWork()} .onSelectModel=${() => { void this.openModelDialog(); }} .onSelectThinking=${() => { void this.openThinkingDialog(); }}></prompt-editor>
             <status-bar .status=${state.status}></status-bar>
             ${state.commandDialog !== undefined ? html`<command-picker .title=${state.commandDialog.title} .options=${state.commandDialog.options} .onPick=${(value: string) => this.sessions.respondToCommand(state.commandDialog?.requestId ?? "", value)} .onCancel=${() => { this.sessions.cancelCommand(); }}></command-picker>` : null}
             ${state.modelDialog !== undefined ? html`<command-picker title=${state.modelDialog.title} .searchable=${true} .options=${state.modelDialog.options} .selectedValue=${state.modelDialog.selectedValue} .onPick=${(value: string) => { void this.pickModel(value); }} .onCancel=${() => { this.setState({ modelDialog: undefined }); }}></command-picker>` : null}
             ${state.thinkingDialog !== undefined ? html`<command-picker title=${state.thinkingDialog.title} .options=${state.thinkingDialog.options} .selectedValue=${state.thinkingDialog.selectedValue} .onPick=${(value: string) => { void this.pickThinking(value); }} .onCancel=${() => { this.setState({ thinkingDialog: undefined }); }}></command-picker>` : null}
             ${state.authDialog !== undefined ? html`<auth-dialog .state=${state.authDialog} .onChooseMethod=${(authType: "oauth" | "api_key") => { void this.auth.chooseLoginMethod(authType); }} .onSelectProvider=${(providerId: string, authType: "oauth" | "api_key") => { void this.auth.selectLoginProvider(providerId, authType); }} .onApiKeyInput=${(value: string) => { this.auth.updateApiKey(value); }} .onSaveApiKey=${() => { void this.auth.saveApiKey(); }} .onLogoutProvider=${(providerId: string) => { void this.auth.logoutProvider(providerId); }} .onOAuthInput=${(value: string) => { this.auth.updateOAuthInput(value); }} .onOAuthRespond=${(value?: string) => { void this.auth.respondOAuth(value); }} .onOAuthCancel=${() => { void this.auth.cancelOAuth(); }} .onCancel=${() => { this.auth.closeDialog(); }}></auth-dialog>` : null}
-            ${state.extensionOverlay !== undefined ? html`<extension-overlay .overlay=${state.extensionOverlay} .onClose=${(requestId: string) => { void this.sessions.respondToCommand(requestId, EXTENSION_OVERLAY_CLOSE_VALUE); }} .onInput=${(requestId: string, data: string) => { void this.sessions.respondToCommand(requestId, `${EXTENSION_OVERLAY_KEY_PREFIX}${encodeURIComponent(data)}`); }}></extension-overlay>` : null}
+            ${state.extensionOverlay !== undefined ? html`<extension-overlay .overlay=${state.extensionOverlay} .inputRequest=${pendingInputRequest} .onClose=${(requestId: string) => { this.respondToExtensionOverlay(requestId, EXTENSION_OVERLAY_CLOSE_VALUE); }} .onRespond=${(requestId: string, value: string) => { this.respondToExtensionOverlay(requestId, value); }} .onInput=${(requestId: string, data: string) => { this.sendExtensionOverlayInput(requestId, data); }}></extension-overlay>` : null}
+            ${state.extensionOverlay === undefined && pendingInputRequest !== undefined ? html`<input-request-dialog .request=${pendingInputRequest} .onAnswer=${(answer: string, question: SessionInputQuestion) => this.answerFallbackInputRequest(answer, question)} .onStop=${() => this.sessions.stopActiveWork()}></input-request-dialog>` : null}
           ` : html`<div class="empty">${this.sessionEmptyMessage()}</div>`}
         </main>
         ${this.renderWorkspacePanelEdgeControl()}
