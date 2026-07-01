@@ -91,8 +91,8 @@ export class ExecutionLog extends LitElement {
     .command-line {
       display: flex; align-items: center; gap: 6px;
       padding: 6px 10px;
-      background: rgba(255,255,255,0.02);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      background: var(--pi-hover-overlay);
+      border-bottom: 1px solid var(--pi-hover-overlay);
       font-size: 12px;
     }
     .prompt { color: var(--pi-muted); font-weight: 600; }
@@ -119,16 +119,16 @@ export class ExecutionLog extends LitElement {
     /* ── Hidden lines button ── */
     .show-hidden {
       display: block; width: 100%;
-      border: 0; border-top: 1px dashed rgba(255,255,255,0.08);
-      border-bottom: 1px dashed rgba(255,255,255,0.08);
+      border: 0; border-top: 1px dashed var(--pi-panel-border);
+      border-bottom: 1px dashed var(--pi-panel-border);
       border-radius: 0;
-      background: rgba(255,255,255,0.02);
+      background: var(--pi-hover-overlay);
       color: var(--pi-muted);
       padding: 6px 0;
       font: 11px system-ui, sans-serif;
       cursor: pointer;
       transition: all .2s cubic-bezier(.4,0,.2,1);
     }
-    .show-hidden:hover { background: rgba(255,255,255,0.05); color: var(--pi-text-secondary); }
+    .show-hidden:hover { background: var(--pi-hover-overlay); color: var(--pi-text-secondary); }
   `;
 }

@@ -424,8 +424,8 @@ export class ToolCallNode extends LitElement {
       font-size: 13px;
     }
     .tcn-diff-stats { display: inline-flex; gap: 2px; font-size: 12px; }
-    .added { color: color-mix(in srgb, #7fd1a0 50%, var(--pi-muted)); }
-    .removed { color: color-mix(in srgb, #f87b7b 50%, var(--pi-muted)); }
+    .added { color: color-mix(in srgb, var(--pi-success) 50%, var(--pi-muted)); }
+    .removed { color: color-mix(in srgb, var(--pi-danger) 50%, var(--pi-muted)); }
     .sep { opacity: .4; }
     .tcn-edit-count { color: var(--pi-dim); font-size: 12px; }
     .tcn-chevron { flex: 0 0 auto; margin-left: auto; color: var(--activity-row-text); font-size: 11px; opacity: .65; }
@@ -450,7 +450,7 @@ export class ToolCallNode extends LitElement {
     .tcn-error { display: grid; gap: 4px; }
     .tcn-error-text {
       margin: 0; border-radius: 6px;
-      background: transparent; color: #f87b7b; padding: 8px;
+      background: transparent; color: var(--pi-danger); padding: 8px;
       white-space: pre-wrap; overflow-wrap: anywhere;
       font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
@@ -686,8 +686,8 @@ export class ToolCallNode extends LitElement {
     .tcn-diff-block .hunk { color: var(--pi-accent-ref); background: var(--pi-accent-ref-bg); }
     .tcn-diff-block .file { color: var(--pi-dim); }
     .tcn-diff-block .meta { color: var(--pi-dim); }
-    .tcn-diff-block .added { background: rgba(127, 209, 160, .06); }
-    .tcn-diff-block .removed { background: rgba(248, 123, 123, .06); }
+    .tcn-diff-block .added { background: color-mix(in srgb, var(--pi-success) 6%, transparent); }
+    .tcn-diff-block .removed { background: color-mix(in srgb, var(--pi-danger) 6%, transparent); }
   `];
 }
 

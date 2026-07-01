@@ -42,7 +42,7 @@ export class CollapsibleSection extends LitElement {
   static override styles = css`
     :host { display: block; width: 100%; max-width: 100%; min-width: 0; }
     .section {
-      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      border-top: 1px solid var(--pi-hover-overlay);
       padding-top: 2px;
     }
     .section.borderless { border-top: 0; padding-top: 0; }
@@ -59,7 +59,7 @@ export class CollapsibleSection extends LitElement {
       cursor: pointer;
       transition: all .2s cubic-bezier(.4, 0, .2, 1);
     }
-    .section-header:hover { background: rgba(255, 255, 255, 0.04); color: var(--pi-text-secondary); }
+    .section-header:hover { background: var(--pi-hover-overlay); color: var(--pi-text-secondary); }
     .section-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; }
 
     .chevron {

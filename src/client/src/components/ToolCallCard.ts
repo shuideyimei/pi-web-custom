@@ -186,11 +186,11 @@ export class ToolCallCard extends LitElement {
       transition: border-color .2s cubic-bezier(.4,0,.2,1), box-shadow .2s cubic-bezier(.4,0,.2,1);
     }
     .tool-card.running, .tool-card.pending {
-      border-color: rgba(139, 178, 255, .25);
+      border-color: color-mix(in srgb, var(--pi-running) 25%, transparent);
       animation: codex-breathe 2s ease-in-out infinite;
     }
-    .tool-card.success { border-color: rgba(127, 209, 160, .12); }
-    .tool-card.error { border-color: rgba(248, 123, 123, .15); }
+    .tool-card.success { border-color: color-mix(in srgb, var(--pi-success) 12%, transparent); }
+    .tool-card.error { border-color: color-mix(in srgb, var(--pi-danger) 15%, transparent); }
     .tool-card.expanded { gap: 8px; padding-bottom: 9px; }
 
     /* ── Header ── */
@@ -203,7 +203,7 @@ export class ToolCallCard extends LitElement {
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--pi-running, #8bb2ff) 14%, transparent) 48%, transparent 100%);
+      background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--pi-running) 14%, transparent) 48%, transparent 100%);
       transform: translateX(-105%);
       animation: tool-header-scan 1.45s ease-in-out infinite;
     }
@@ -213,7 +213,7 @@ export class ToolCallCard extends LitElement {
       0% { transform: translateX(-105%); }
       100% { transform: translateX(105%); }
     }
-    .tool-header:hover { background: rgba(255,255,255,0.04); }
+    .tool-header:hover { background: var(--pi-hover-overlay); }
     .tool-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: -2px; border-radius: 6px; }
 
     /* ── Status icon: Quantum Beacon ── */
@@ -240,41 +240,41 @@ export class ToolCallCard extends LitElement {
 
     /* ── Error section ── */
     .error-section { display: grid; gap: 4px; }
-    .error-text { margin: 0; border: 1px solid rgba(248,123,123,.25); border-radius: 7px; background: transparent; color: var(--pi-danger); padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .error-text { margin: 0; border: 1px solid color-mix(in srgb, var(--pi-danger) 25%, transparent); border-radius: 7px; background: transparent; color: var(--pi-danger); padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .error-suggestion { margin: 0; color: var(--pi-text-secondary); font-size: 12px; font-style: italic; }
 
     /* ── Args section ── */
-    .args-section { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 6px; }
+    .args-section { border-top: 1px solid var(--pi-hover-overlay); padding-top: 6px; }
     .args-section > summary { font-size: 12px; color: var(--pi-muted); cursor: pointer; }
     .args-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--pi-text); max-height: 200px; overflow-y: auto; background: transparent; border-radius: 6px; padding: 6px 8px; }
 
     /* ── Text body ── */
-    .text-body { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 6px; }
+    .text-body { border-top: 1px solid var(--pi-hover-overlay); padding-top: 6px; }
     .text-body > summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; color: var(--pi-muted); cursor: pointer; font-size: 12px; }
     .text-body > summary small { flex: 0 0 auto; color: var(--pi-dim); }
     .text-body pre { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--pi-text); }
     .truncation-hint { color: var(--pi-muted); font-style: italic; }
 
     /* ── Diff details (solid core) ── */
-    .diff-details { min-width: 0; max-width: 100%; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 6px; }
+    .diff-details { min-width: 0; max-width: 100%; border-top: 1px solid var(--pi-hover-overlay); padding-top: 6px; }
     .diff-details > summary { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; color: var(--pi-muted); cursor: pointer; font-size: 12px; }
     .diff-details > summary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .diff-details > summary small { flex: 0 0 auto; color: var(--pi-dim); }
     .diff-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; margin-top: 6px; color: var(--pi-muted); font-size: 12px; }
     .diff-toolbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     button { border: 1px solid var(--pi-border-muted); border-radius: 6px; background: var(--pi-surface-hover); color: var(--pi-text); padding: 3px 7px; font: 12px system-ui, sans-serif; cursor: pointer; transition: all .2s cubic-bezier(.4,0,.2,1); }
-    button:hover, button:focus { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.15); }
+    button:hover, button:focus { background: var(--pi-hover-overlay-strong); border-color: var(--pi-hover-overlay-strong); }
 
     /* ── Diff block (solid core, no backdrop-filter) ── */
-    .diff { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; margin: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; border: 1px solid rgba(255,255,255,0.05); border-radius: 7px; background: transparent; padding: 8px 0; color: var(--pi-muted); font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.45; }
+    .diff { box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; margin: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; border: 1px solid var(--pi-hover-overlay); border-radius: 7px; background: transparent; padding: 8px 0; color: var(--pi-muted); font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.45; }
     .diff-content { display: block; width: max-content; min-width: 100%; }
     .diff span { display: block; min-height: 1.45em; padding: 0 8px; white-space: pre; }
     .diff .context { color: var(--pi-muted); }
     .diff .hunk { color: var(--pi-accent-ref); background: var(--pi-accent-ref-bg); }
     .diff .file { color: var(--pi-dim); }
     .diff .meta { color: var(--pi-dim); }
-    .diff .added { background: rgba(127, 209, 160, .06); }
-    .diff .removed { background: rgba(248, 123, 123, .06); }
+    .diff .added { background: color-mix(in srgb, var(--pi-success) 6%, transparent); }
+    .diff .removed { background: color-mix(in srgb, var(--pi-danger) 6%, transparent); }
     .show-more { justify-self: start; }
   `];
 }

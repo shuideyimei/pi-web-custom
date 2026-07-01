@@ -132,7 +132,7 @@ export class MessageBubble extends LitElement {
   static override styles = css`
     :host { display: block; width: 100%; max-width: 100%; min-width: 0; }
     .bubble { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px; padding: 8px; border-radius: 0; border: 0; background: transparent; }
-    .bubble.user { color: rgba(255, 255, 255, 0.85); }
+    .bubble.user { color: var(--pi-user-message-text); }
     .bubble.assistant { background: transparent; }
     .bubble.system { background: var(--pi-danger-bg); }
     .bubble.bash { background: var(--pi-success-bg); }
@@ -140,7 +140,7 @@ export class MessageBubble extends LitElement {
     .bubble.skill { background: var(--pi-purple-surface); }
     .avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: 0 0 auto; margin-top: 2px; }
     .user-avatar { background: color-mix(in srgb, var(--pi-text) 8%, transparent); color: var(--pi-text-secondary); }
-    .assistant-avatar { background: rgba(255,255,255,0.03); color: var(--pi-text-secondary); }
+    .assistant-avatar { background: var(--pi-hover-overlay); color: var(--pi-text-secondary); }
     .system-avatar { background: var(--pi-danger-bg); color: var(--pi-danger); }
     .bash-avatar { background: var(--pi-success-bg); color: var(--pi-success); font-family: ui-monospace, monospace; }
     .tool-avatar { background: var(--pi-warning-surface); color: var(--pi-warning); }
@@ -150,12 +150,12 @@ export class MessageBubble extends LitElement {
     .part + .part { margin-top: 4px; }
     .tool-line { color: var(--pi-warning); font-size: 13px; }
     .summary { color: var(--pi-muted); margin-left: 6px; }
-    .part:is(details) { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 4px; }
+    .part:is(details) { border-top: 1px solid var(--pi-hover-overlay); padding-top: 4px; }
     .skill-invocation { border: 1px solid var(--pi-border); border-radius: 8px; background: transparent; padding: 8px 10px; }
     .skill-invocation > summary { color: var(--pi-purple); }
     .skill-invocation > small { display: block; margin: 6px 0 0; color: var(--pi-muted); }
-    .thinking-section { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 8px; }
-    .chat-image { display: block; max-width: 100%; max-height: 320px; margin: 4px 0 0; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; object-fit: contain; }
+    .thinking-section { border-top: 1px solid var(--pi-hover-overlay); padding-top: 8px; }
+    .chat-image { display: block; max-width: 100%; max-height: 320px; margin: 4px 0 0; border: 1px solid var(--pi-hover-overlay); border-radius: 8px; object-fit: contain; }
     formatted-text.part { display: block; }
   `;
 }

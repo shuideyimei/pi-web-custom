@@ -86,8 +86,8 @@ export class InputRequestDialog extends LitElement {
 
   static override styles = css`
     :host { position: fixed; inset: 0; z-index: 61; display: block; color: var(--pi-text); }
-    .backdrop { display: grid; place-items: center; width: 100%; height: 100dvh; box-sizing: border-box; padding: 18px; background: color-mix(in srgb, #000 54%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-    section { width: min(680px, 100%); max-height: min(760px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid color-mix(in srgb, var(--pi-border) 72%, #fff 10%); border-radius: 8px; background: var(--pi-bg); box-shadow: 0 24px 80px color-mix(in srgb, #000 58%, transparent); overflow: hidden; }
+    .backdrop { display: grid; place-items: center; width: 100%; height: 100dvh; box-sizing: border-box; padding: 18px; background: var(--pi-backdrop); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    section { width: min(680px, 100%); max-height: min(760px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid var(--pi-elevated-border); border-radius: 8px; background: var(--pi-bg); box-shadow: 0 24px 80px var(--pi-backdrop); overflow: hidden; }
     header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--pi-border-muted); background: var(--pi-surface); }
     header div { min-width: 0; display: grid; gap: 2px; }
     strong { color: var(--pi-text-bright); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

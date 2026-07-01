@@ -124,13 +124,13 @@ export class SubagentToolDetails extends LitElement {
   static override styles = css`
     :host { display: block; min-width: 0; }
     .subagent-detail { display: grid; gap: 10px; min-width: 0; }
-    .subagent-overview { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border: 1px solid var(--pi-border-muted); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .subagent-overview { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border: 1px solid var(--pi-border-muted); border-radius: 10px; background: var(--pi-hover-overlay); }
     .overview-text { display: grid; gap: 3px; min-width: 0; }
     .subagent-title { color: var(--pi-text); font-weight: 650; }
     .meta-row { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; color: var(--pi-muted); font-size: 12px; }
     .meta-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .result-list { display: grid; gap: 9px; }
-    .result { display: grid; gap: 6px; min-width: 0; padding: 8px 10px; border-left: 2px solid var(--pi-border-muted); background: rgba(255,255,255,.018); border-radius: 0 10px 10px 0; }
+    .result { display: grid; gap: 6px; min-width: 0; padding: 8px 10px; border-left: 2px solid var(--pi-border-muted); background: var(--pi-hover-overlay); border-radius: 0 10px 10px 0; }
     .result.running { border-left-color: var(--pi-running); }
     .result.completed { border-left-color: var(--pi-success); }
     .result.failed { border-left-color: var(--pi-danger); }
@@ -138,7 +138,7 @@ export class SubagentToolDetails extends LitElement {
     .result-header { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
     .result-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-text); }
     .status-label { margin-left: auto; flex: 0 0 auto; color: var(--pi-muted); font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: .05em; }
-    .status-dot { width: 8px; height: 8px; border-radius: 999px; margin-top: .45em; flex: 0 0 auto; background: var(--pi-muted); box-shadow: 0 0 0 3px rgba(255,255,255,.03); }
+    .status-dot { width: 8px; height: 8px; border-radius: 999px; margin-top: .45em; flex: 0 0 auto; background: var(--pi-muted); box-shadow: 0 0 0 3px var(--pi-hover-overlay); }
     .status-dot.running { background: var(--pi-running); }
     .status-dot.completed { background: var(--pi-success); }
     .status-dot.failed { background: var(--pi-danger); }

@@ -76,7 +76,7 @@ export class DiffViewer extends LitElement {
       padding: 6px 10px; cursor: pointer; user-select: none;
       transition: background .2s cubic-bezier(.4,0,.2,1);
     }
-    .diff-header:hover { background: rgba(255,255,255,0.04); }
+    .diff-header:hover { background: var(--pi-hover-overlay); }
     .diff-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: -2px; }
     .chevron { font-size: 11px; color: var(--pi-muted); }
     .change-badge {
@@ -97,15 +97,15 @@ export class DiffViewer extends LitElement {
     .risk-badge {
       flex: 0 0 auto;
       font-size: 10px; padding: 1px 6px; border-radius: 4px;
-      background: rgba(238,178,101,0.1); color: var(--pi-warning);
-      border: 1px solid rgba(238,178,101,.2);
+      background: color-mix(in srgb, var(--pi-warning) 10%, transparent); color: var(--pi-warning);
+      border: 1px solid color-mix(in srgb, var(--pi-warning) 2%, transparent);
     }
     .diff-summary { display: inline-flex; gap: 4px; font-size: 12px; }
     .added { color: var(--pi-success); }
     .removed { color: var(--pi-danger); }
 
     /* ── Diff body: solid core, no backdrop-filter ── */
-    .diff-body { border-top: 1px solid rgba(255,255,255,0.04); }
+    .diff-body { border-top: 1px solid var(--pi-hover-overlay); }
     .diff-toolbar {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
       padding: 4px 10px; color: var(--pi-muted); font-size: 12px;
@@ -116,7 +116,7 @@ export class DiffViewer extends LitElement {
       padding: 3px 7px; font: 12px system-ui, sans-serif; cursor: pointer;
       transition: all .2s cubic-bezier(.4,0,.2,1);
     }
-    button:hover, button:focus { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.15); }
+    button:hover, button:focus { background: var(--pi-hover-overlay-strong); border-color: var(--pi-hover-overlay-strong); }
     .diff {
       margin: 0; padding: 8px 0; overflow-x: auto;
       font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -129,8 +129,8 @@ export class DiffViewer extends LitElement {
     .diff .hunk { color: var(--pi-accent-ref); background: var(--pi-accent-ref-bg); }
     .diff .file { color: var(--pi-dim); }
     .diff .meta { color: var(--pi-dim); }
-    .diff .added { background: rgba(127, 209, 160, .1); }
-    .diff .removed { background: rgba(248, 123, 123, .1); }
+    .diff .added { background: color-mix(in srgb, var(--pi-success) 1%, transparent); }
+    .diff .removed { background: color-mix(in srgb, var(--pi-danger) 1%, transparent); }
   `;
 }
 

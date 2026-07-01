@@ -58,10 +58,10 @@ export class ToastContainer extends LitElement {
       animation: toast-in 0.3s ease-out;
       pointer-events: auto;
     }
-    .toast-info { background: #3b82f6; }
-    .toast-success { background: #22c55e; }
-    .toast-error { background: #ef4444; }
-    .toast-warning { background: #f59e0b; }
+    .toast-info { background: var(--pi-info); }
+    .toast-success { background: var(--pi-success); }
+    .toast-error { background: var(--pi-danger); }
+    .toast-warning { background: var(--pi-warning); }
     @keyframes toast-in {
       from { opacity: 0; transform: translateX(100%); }
       to { opacity: 1; transform: translateX(0); }

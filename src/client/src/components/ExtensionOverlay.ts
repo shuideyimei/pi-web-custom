@@ -179,13 +179,13 @@ export class ExtensionOverlay extends LitElement {
 
   static override styles = css`
     :host { position: fixed; inset: 0; z-index: 60; display: block; }
-    .backdrop { display: grid; place-items: center; width: 100%; height: 100dvh; box-sizing: border-box; padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); background: color-mix(in srgb, #000 62%, transparent); backdrop-filter: blur(18px) saturate(115%); -webkit-backdrop-filter: blur(18px) saturate(115%); overflow: hidden; }
-    section { width: min(1120px, 100%); max-height: min(860px, 100%); min-height: 180px; display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid color-mix(in srgb, var(--pi-border) 72%, #fff 10%); border-radius: 8px; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 90px), color-mix(in srgb, var(--pi-bg) 88%, #111 12%); color: var(--pi-text); box-shadow: 0 24px 80px color-mix(in srgb, #000 62%, transparent), 0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset; overflow: hidden; }
+    .backdrop { display: grid; place-items: center; width: 100%; height: 100dvh; box-sizing: border-box; padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); background: var(--pi-backdrop); backdrop-filter: blur(18px) saturate(115%); -webkit-backdrop-filter: blur(18px) saturate(115%); overflow: hidden; }
+    section { width: min(1120px, 100%); max-height: min(860px, 100%); min-height: 180px; display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid var(--pi-elevated-border); border-radius: 8px; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 90px), var(--pi-elevated-bg); color: var(--pi-text); box-shadow: 0 24px 80px var(--pi-backdrop), 0 1px 0 var(--pi-inset-highlight) inset; overflow: hidden; }
     section:focus { outline: none; }
     section:focus-visible { outline: 2px solid color-mix(in srgb, var(--pi-text-bright) 34%, var(--pi-accent) 66%); outline-offset: 2px; }
     header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid color-mix(in srgb, var(--pi-border-muted) 70%, transparent); background: color-mix(in srgb, var(--pi-surface) 58%, transparent); }
     strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-text-bright); font-size: 14px; }
-    button { border: 1px solid color-mix(in srgb, var(--pi-border) 72%, #fff 10%); border-radius: 8px; background: color-mix(in srgb, var(--pi-surface) 78%, var(--pi-bg) 22%); color: var(--pi-text); width: 32px; height: 32px; padding: 0; font: inherit; cursor: pointer; }
+    button { border: 1px solid var(--pi-elevated-border); border-radius: 8px; background: color-mix(in srgb, var(--pi-surface) 78%, var(--pi-bg) 22%); color: var(--pi-text); width: 32px; height: 32px; padding: 0; font: inherit; cursor: pointer; }
     button:hover, button:focus { color: var(--pi-text-bright); background: color-mix(in srgb, var(--pi-text) 9%, transparent); }
     button:focus-visible { outline: 2px solid color-mix(in srgb, var(--pi-text-bright) 34%, var(--pi-accent) 66%); outline-offset: 2px; }
     button:disabled, textarea:disabled { opacity: .62; cursor: default; }
@@ -204,7 +204,7 @@ export class ExtensionOverlay extends LitElement {
     .text-answer, .custom-answer { display: grid; gap: 10px; min-width: 0; }
     .custom-answer { border-top: 1px solid color-mix(in srgb, var(--pi-border-muted) 70%, transparent); padding-top: 12px; }
     label { display: grid; gap: 6px; min-width: 0; color: var(--pi-muted); font-size: 12px; font-weight: 600; }
-    textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; border: 1px solid color-mix(in srgb, var(--pi-border) 76%, #fff 8%); border-radius: 8px; background: color-mix(in srgb, var(--pi-surface) 80%, var(--pi-bg) 20%); color: var(--pi-text-bright); padding: 9px 10px; font: 13px/1.45 system-ui, sans-serif; }
+    textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; border: 1px solid var(--pi-elevated-border); border-radius: 8px; background: color-mix(in srgb, var(--pi-surface) 80%, var(--pi-bg) 20%); color: var(--pi-text-bright); padding: 9px 10px; font: 13px/1.45 system-ui, sans-serif; }
     textarea:focus { outline: none; border-color: color-mix(in srgb, var(--pi-accent) 70%, var(--pi-border)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pi-accent) 22%, transparent); }
     .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .dialog-actions button { width: auto; min-width: 76px; height: 34px; padding: 0 10px; }

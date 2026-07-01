@@ -206,16 +206,16 @@ export class SettingsDialog extends LitElement {
       z-index: 30;
       color: var(--pi-text);
       font: 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --codex-dialog-backdrop: color-mix(in srgb, #000 62%, transparent);
-      --codex-dialog-surface: color-mix(in srgb, var(--pi-bg) 88%, #111 12%);
+      --codex-dialog-backdrop: var(--pi-backdrop);
+      --codex-dialog-surface: var(--pi-elevated-bg);
       --codex-dialog-panel: color-mix(in srgb, var(--pi-surface) 78%, var(--pi-bg) 22%);
       --codex-dialog-panel-hover: color-mix(in srgb, var(--pi-text) 9%, transparent);
-      --codex-dialog-border: color-mix(in srgb, var(--pi-border) 72%, #fff 10%);
+      --codex-dialog-border: var(--pi-elevated-border);
       --codex-dialog-hairline: color-mix(in srgb, var(--pi-border-muted) 70%, transparent);
       --codex-dialog-focus: color-mix(in srgb, var(--pi-text-bright) 34%, var(--pi-accent) 66%);
     }
     .backdrop { box-sizing: border-box; width: 100%; height: 100dvh; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); background: var(--codex-dialog-backdrop); backdrop-filter: blur(18px) saturate(115%); -webkit-backdrop-filter: blur(18px) saturate(115%); overflow: hidden; }
-    .settings-shell { width: min(980px, 100%); max-height: min(760px, 100%); min-height: min(620px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid var(--codex-dialog-border); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 96px), var(--codex-dialog-surface); box-shadow: 0 24px 80px color-mix(in srgb, #000 62%, transparent), 0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset; overflow: hidden; }
+    .settings-shell { width: min(980px, 100%); max-height: min(760px, 100%); min-height: min(620px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid var(--codex-dialog-border); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 96px), var(--codex-dialog-surface); box-shadow: 0 24px 80px var(--pi-backdrop), 0 1px 0 var(--pi-inset-highlight) inset; overflow: hidden; }
     .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--codex-dialog-hairline); background: color-mix(in srgb, var(--codex-dialog-panel) 58%, transparent); }
     .eyebrow { display: block; color: var(--pi-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
     h1 { margin: 0; color: var(--pi-text-bright); font-size: 20px; line-height: 1.2; }

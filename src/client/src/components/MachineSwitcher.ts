@@ -288,8 +288,8 @@ export class MachineSwitcher extends LitElement implements KeyboardNavigableSect
       border-radius: 2px;
       width: 10px;
       height: 10px;
-      border: 1px solid rgba(139, 178, 255, 0.3);
-      background: rgba(139, 178, 255, 0.05);
+      border: 1px solid color-mix(in srgb, var(--pi-running) 30%, transparent);
+      background: color-mix(in srgb, var(--pi-running) 5%, transparent);
       overflow: hidden;
     }
     .activity-indicator.terminal::before {
@@ -307,7 +307,7 @@ export class MachineSwitcher extends LitElement implements KeyboardNavigableSect
       right: 2px;
       top: 0;
       height: 1px;
-      background: rgba(139, 178, 255, 0.6);
+      background: color-mix(in srgb, var(--pi-running) 60%, transparent);
       animation: terminal-scan-line 1.5s ease-in-out infinite;
       filter: none;
       opacity: 1;

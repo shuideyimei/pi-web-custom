@@ -62,7 +62,7 @@ export class ToolCallGroup extends LitElement {
     :host { display: block; width: 100%; max-width: 100%; min-width: 0; }
     .tool-group { display: grid; gap: 4px; width: 100%; max-width: 100%; min-width: 0; }
     .group-header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 6px 8px; border: 1px solid var(--pi-border-muted); border-radius: 12px; background: var(--pi-surface); cursor: pointer; user-select: none; font-size: 13px; }
-    .group-header:hover { background: rgba(255,255,255,0.07); }
+    .group-header:hover { background: var(--pi-hover-overlay-strong); }
     .group-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: -2px; border-radius: 8px; }
     .chevron { font-size: 11px; color: var(--pi-muted); }
     strong { color: var(--pi-text); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
@@ -73,10 +73,10 @@ export class ToolCallGroup extends LitElement {
     .stat.running { color: var(--pi-running); }
     .group-body { display: grid; gap: 4px; padding-left: 8px; }
     .group-preview { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0; }
-    .preview-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; background: transparent; padding: 2px 8px; font-size: 12px; color: var(--pi-text); }
-    .preview-chip.success { border-color: rgba(127,209,160,.12); }
-    .preview-chip.error { border-color: rgba(248,123,123,.15); }
-    .preview-chip.running, .preview-chip.pending { border-color: rgba(139,178,255,.15); }
+    .preview-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--pi-hover-overlay); border-radius: 6px; background: transparent; padding: 2px 8px; font-size: 12px; color: var(--pi-text); }
+    .preview-chip.success { border-color: color-mix(in srgb, var(--pi-success) 12%, transparent); }
+    .preview-chip.error { border-color: color-mix(in srgb, var(--pi-danger) 15%, transparent); }
+    .preview-chip.running, .preview-chip.pending { border-color: color-mix(in srgb, var(--pi-running) 15%, transparent); }
 
     .preview-path { color: var(--pi-accent); font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   `];

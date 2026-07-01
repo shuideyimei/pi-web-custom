@@ -130,22 +130,22 @@ export class ProjectDialog extends LitElement {
       z-index: 30;
       color: var(--pi-text);
       font: 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --codex-dialog-backdrop: color-mix(in srgb, #000 62%, transparent);
-      --codex-dialog-surface: color-mix(in srgb, var(--pi-bg) 88%, #111 12%);
+      --codex-dialog-backdrop: var(--pi-backdrop);
+      --codex-dialog-surface: var(--pi-elevated-bg);
       --codex-dialog-panel: color-mix(in srgb, var(--pi-surface) 78%, var(--pi-bg) 22%);
       --codex-dialog-panel-hover: color-mix(in srgb, var(--pi-text) 9%, transparent);
-      --codex-dialog-border: color-mix(in srgb, var(--pi-border) 72%, #fff 10%);
+      --codex-dialog-border: var(--pi-elevated-border);
       --codex-dialog-hairline: color-mix(in srgb, var(--pi-border-muted) 70%, transparent);
       --codex-dialog-focus: color-mix(in srgb, var(--pi-text-bright) 34%, var(--pi-accent) 66%);
     }
     .backdrop { display: grid; place-items: start center; width: 100%; height: 100dvh; box-sizing: border-box; padding: min(12dvh, 92px) 20px max(20px, env(safe-area-inset-bottom)); background: var(--codex-dialog-backdrop); backdrop-filter: blur(18px) saturate(115%); -webkit-backdrop-filter: blur(18px) saturate(115%); overflow: hidden; }
-    section { width: min(720px, 100%); max-height: min(700px, calc(100dvh - min(12dvh, 92px) - max(20px, env(safe-area-inset-bottom)))); display: flex; flex-direction: column; border: 1px solid var(--codex-dialog-border); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 80px), var(--codex-dialog-surface); box-shadow: 0 24px 80px color-mix(in srgb, #000 62%, transparent), 0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset; overflow: hidden; }
+    section { width: min(720px, 100%); max-height: min(700px, calc(100dvh - min(12dvh, 92px) - max(20px, env(safe-area-inset-bottom)))); display: flex; flex-direction: column; border: 1px solid var(--codex-dialog-border); border-radius: 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 80px), var(--codex-dialog-surface); box-shadow: 0 24px 80px var(--pi-backdrop), 0 1px 0 var(--pi-inset-highlight) inset; overflow: hidden; }
     header, footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--codex-dialog-hairline); background: color-mix(in srgb, var(--codex-dialog-panel) 58%, transparent); }
     header strong { color: var(--pi-text-secondary); font-size: 13px; font-weight: 650; letter-spacing: .01em; }
     footer { border-top: 1px solid var(--codex-dialog-hairline); border-bottom: 0; justify-content: end; }
     .body { display: grid; gap: 14px; min-height: 0; overflow: auto; padding: 16px; }
     label { display: grid; gap: 7px; color: var(--pi-muted); }
-    input[type="text"], input:not([type]) { box-sizing: border-box; width: 100%; border: 1px solid var(--codex-dialog-border); border-radius: 13px; background: var(--codex-dialog-panel); color: var(--pi-text); padding: 10px 12px; outline: none; font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; box-shadow: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset; }
+    input[type="text"], input:not([type]) { box-sizing: border-box; width: 100%; border: 1px solid var(--codex-dialog-border); border-radius: 13px; background: var(--codex-dialog-panel); color: var(--pi-text); padding: 10px 12px; outline: none; font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; box-shadow: 0 1px 0 var(--pi-inset-highlight) inset; }
     input:focus-visible { outline: 2px solid var(--codex-dialog-focus); outline-offset: 2px; }
     .check { display: flex; grid-template-columns: auto 1fr; align-items: center; color: var(--pi-text); }
     .suggestions { min-height: 90px; max-height: 320px; overflow: auto; border: 1px solid var(--codex-dialog-border); border-radius: 13px; background: color-mix(in srgb, var(--codex-dialog-panel) 82%, transparent); padding: 5px; scrollbar-width: thin; }

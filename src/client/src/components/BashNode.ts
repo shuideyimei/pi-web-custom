@@ -117,7 +117,7 @@ export class BashNode extends LitElement {
       transition: background .15s ease;
       font-size: 13px;
     }
-    .bash-header:hover { background: rgba(255, 255, 255, 0.03); }
+    .bash-header:hover { background: var(--pi-hover-overlay); }
     .bash-header:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; border-radius: 4px; }
 
     .bash-prompt {
@@ -171,7 +171,7 @@ export class BashNode extends LitElement {
       gap: 4px;
       padding: 6px 10px;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.02);
+      background: var(--pi-hover-overlay);
     }
 
     .bash-stdout, .bash-stderr {
@@ -211,8 +211,8 @@ export class BashNode extends LitElement {
       transition: all .2s cubic-bezier(.4,0,.2,1);
     }
     .bash-show-more:hover, .bash-show-more:focus {
-      background: rgba(255,255,255,0.07);
-      border-color: rgba(255,255,255,0.15);
+      background: var(--pi-hover-overlay-strong);
+      border-color: var(--pi-hover-overlay-strong);
     }
   `;
 }

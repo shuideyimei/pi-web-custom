@@ -363,14 +363,14 @@ export class WorkspaceFilesPanel extends LitElement {
         display: grid;
         place-items: center;
         padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
-        background: color-mix(in srgb, #000 62%, transparent);
+        background: var(--pi-backdrop);
         backdrop-filter: blur(18px) saturate(115%);
         -webkit-backdrop-filter: blur(18px) saturate(115%);
       }
       .upload-dialog {
         --codex-dialog-panel: color-mix(in srgb, var(--pi-surface) 78%, var(--pi-bg) 22%);
         --codex-dialog-panel-hover: color-mix(in srgb, var(--pi-text) 9%, transparent);
-        --codex-dialog-border: color-mix(in srgb, var(--pi-border) 72%, #fff 10%);
+        --codex-dialog-border: var(--pi-elevated-border);
         --codex-dialog-hairline: color-mix(in srgb, var(--pi-border-muted) 70%, transparent);
         --codex-dialog-focus: color-mix(in srgb, var(--pi-text-bright) 34%, var(--pi-accent) 66%);
         box-sizing: border-box;
@@ -381,8 +381,8 @@ export class WorkspaceFilesPanel extends LitElement {
         overflow: hidden;
         border: 1px solid var(--codex-dialog-border);
         border-radius: 18px;
-        background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 80px), color-mix(in srgb, var(--pi-bg) 88%, #111 12%);
-        box-shadow: 0 24px 80px color-mix(in srgb, #000 62%, transparent), 0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset;
+        background: linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 80px), var(--pi-elevated-bg);
+        box-shadow: 0 24px 80px var(--pi-backdrop), 0 1px 0 var(--pi-inset-highlight) inset;
       }
       .upload-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--codex-dialog-hairline); background: color-mix(in srgb, var(--codex-dialog-panel) 58%, transparent); }
       .upload-dialog h2 { margin: 2px 0 0; color: var(--pi-text-bright); font-size: 18px; line-height: 1.2; }
@@ -392,7 +392,7 @@ export class WorkspaceFilesPanel extends LitElement {
       form { min-height: 0; display: flex; flex-direction: column; gap: 13px; overflow: auto; padding: 16px; scrollbar-width: thin; }
       form > label { display: grid; gap: 7px; }
       form > label > span, .review-files > strong { font-weight: 600; }
-      input[type="text"], form > label > input:not([type]) { box-sizing: border-box; width: 100%; border: 1px solid var(--codex-dialog-border); border-radius: 13px; background: var(--codex-dialog-panel); color: var(--pi-text); padding: 10px 12px; outline: none; font: inherit; box-shadow: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset; }
+      input[type="text"], form > label > input:not([type]) { box-sizing: border-box; width: 100%; border: 1px solid var(--codex-dialog-border); border-radius: 13px; background: var(--codex-dialog-panel); color: var(--pi-text); padding: 10px 12px; outline: none; font: inherit; box-shadow: 0 1px 0 var(--pi-inset-highlight) inset; }
       input:focus-visible { outline: 2px solid var(--codex-dialog-focus); outline-offset: 2px; }
       .dialog-options { display: grid; gap: 8px; }
       .dialog-options label { display: flex; align-items: center; gap: 8px; color: var(--pi-text); }

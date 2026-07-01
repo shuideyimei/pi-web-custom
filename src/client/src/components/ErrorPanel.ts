@@ -46,26 +46,26 @@ export class ErrorPanel extends LitElement {
     .error-panel {
       display: grid; gap: 6px; width: 100%;
       border: 0;
-      border-left: 2px solid rgba(248, 123, 123, 0.6);
+      border-left: 2px solid color-mix(in srgb, var(--pi-danger) 60%, transparent);
       border-radius: 12px;
       background: transparent;
       padding: 8px 10px;
     }
     .error-header { display: flex; gap: 8px; align-items: flex-start; }
-    .error-icon { color: #f87b7b; font-size: 14px; flex: 0 0 auto; margin-top: 1px; }
+    .error-icon { color: var(--pi-danger); font-size: 14px; flex: 0 0 auto; margin-top: 1px; }
     .error-layers { display: grid; gap: 3px; min-width: 0; }
     .error-layer { font-size: 12px; color: var(--pi-text-secondary); line-height: 1.4; }
-    .layer-1 { color: #f87b7b; font-weight: 500; }
+    .layer-1 { color: var(--pi-danger); font-weight: 500; }
     .layer-1 strong { font-weight: 600; }
     .layer-2 code {
-      background: rgba(255,255,255,0.08); border-radius: 6px; padding: 2px 6px;
+      background: var(--pi-panel-border); border-radius: 6px; padding: 2px 6px;
       font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       color: var(--pi-accent-ref);
     }
     .layer-3 { color: var(--pi-warning); }
-    .layer-4 { color: #7fd1a0; font-style: italic; }
+    .layer-4 { color: var(--pi-success); font-style: italic; }
     .layer-label { color: var(--pi-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; margin-right: 4px; }
-    .stack-section { border-top: 1px solid rgba(248,123,123,.1); padding-top: 4px; }
+    .stack-section { border-top: 1px solid color-mix(in srgb, var(--pi-danger) 1%, transparent); padding-top: 4px; }
     .stack-section > summary { font-size: 11px; color: var(--pi-dim); cursor: pointer; font-family: monospace; }
     .stack-trace {
       margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere;

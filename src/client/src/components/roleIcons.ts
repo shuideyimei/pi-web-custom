@@ -98,11 +98,11 @@ export const roleIconStyles: CSSResult = css`
 
   /* ── User: cyan accent ── */
   .msg.user .role-icon { color: var(--pi-accent); }
-  .msg.user .role-icon:hover { background: rgba(139, 178, 255, 0.08); }
+  .msg.user .role-icon:hover { background: color-mix(in srgb, var(--pi-running) 8%, transparent); }
 
   /* ── Assistant: neutral with slow ripple ── */
   .msg.assistant .role-icon { color: var(--pi-text-secondary); }
-  .msg.assistant .role-icon:hover { background: rgba(255, 255, 255, 0.05); }
+  .msg.assistant .role-icon:hover { background: var(--pi-hover-overlay); }
   .msg.assistant .ri-ring {
     animation: ri-ripple 3s ease-in-out infinite;
     transform-origin: center;
@@ -114,22 +114,22 @@ export const roleIconStyles: CSSResult = css`
 
   /* ── System: danger red ── */
   .msg.system .role-icon { color: var(--pi-danger); }
-  .msg.system .role-icon:hover { background: rgba(248, 123, 123, 0.06); }
+  .msg.system .role-icon:hover { background: color-mix(in srgb, var(--pi-danger) 6%, transparent); }
 
   /* ── Bash: mint green with cursor blink ── */
   .msg.bash .role-icon { color: var(--pi-success); }
-  .msg.bash .role-icon:hover { background: rgba(127, 209, 160, 0.06); }
+  .msg.bash .role-icon:hover { background: color-mix(in srgb, var(--pi-success) 6%, transparent); }
   .msg.bash .ri-cursor {
     animation: ri-blink 1.4s steps(1, end) infinite;
   }
 
   /* ── Skill: purple ── */
   .msg.skill .role-icon { color: var(--pi-purple); }
-  .msg.skill .role-icon:hover { background: rgba(210, 168, 255, 0.06); }
+  .msg.skill .role-icon:hover { background: color-mix(in srgb, var(--pi-purple) 6%, transparent); }
 
   /* ── Tool: amber ── */
   .msg.tool .role-icon { color: var(--pi-warning); }
-  .msg.tool .role-icon:hover { background: rgba(238, 178, 101, 0.06); }
+  .msg.tool .role-icon:hover { background: color-mix(in srgb, var(--pi-warning) 6%, transparent); }
 
   /* ═══ Keyframes — subtle only ═══ */
   @keyframes ri-ripple {
