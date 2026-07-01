@@ -106,9 +106,10 @@ function renderDiffViewer(context: WorkspacePanelContext): TemplateResult {
 
 function renderDiffSection(diff: GitDiffResponse): TemplateResult {
   loadUnifiedDiffViewer();
+  const statusLabel = diff.committed === true ? "committed" : diff.staged ? "staged" : "unstaged";
   return html`
     <section class="diff-section">
-      <div class="viewer-header"><strong>${diff.path ?? "diff"}</strong><small>${diff.staged ? "staged" : "unstaged"}${diff.truncated ? " · truncated" : ""}</small></div>
+      <div class="viewer-header"><strong>${diff.path ?? "diff"}</strong><small class="diff-status ${statusLabel}">${statusLabel}${diff.truncated ? " · truncated" : ""}</small></div>
       <unified-diff-viewer .diff=${diff.diff}></unified-diff-viewer>
     </section>
   `;

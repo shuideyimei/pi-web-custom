@@ -408,7 +408,7 @@ function parseGitFileState(value: unknown): GitFileState {
 
 export function parseGitDiffResponse(value: unknown): GitDiffResponse {
   const record = requireRecord(value);
-  return { ...optionalField("path", optionalString(record, "path")), staged: requireBoolean(record, "staged"), hash: requireString(record, "hash"), diff: requireString(record, "diff"), truncated: requireBoolean(record, "truncated") };
+  return { ...optionalField("path", optionalString(record, "path")), staged: requireBoolean(record, "staged"), hash: requireString(record, "hash"), diff: requireString(record, "diff"), truncated: requireBoolean(record, "truncated"), ...optionalField("committed", optionalBoolean(record, "committed")) };
 }
 
 export function parseTerminalInfo(value: unknown): TerminalInfo {

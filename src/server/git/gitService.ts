@@ -28,7 +28,21 @@ export async function gitDiff(cwd: string, options: { path?: string; staged?: bo
     if (untracked.code !== 0 && untracked.code !== 1) throw new Error(untracked.stderr.trim() || "git diff failed");
     return { path, staged, hash: hash(untracked.stdout), diff: untracked.stdout, truncated: untracked.truncated };
   }
+  if (!staged && path !== undefined && result.stdout === "") {
+    const committed = await lastCommitDiff(cwd, path);
+    if (committed !== undefined) return committed;
+  }
   return { ...(path === undefined ? {} : { path }), staged, hash: hash(result.stdout), diff: result.stdout, truncated: result.truncated };
+}
+
+async function lastCommitDiff(cwd: string, path: string): Promise<GitDiffResponse | undefined> {
+  const logResult = await runGit(cwd, ["log", "-1", "--format=%H", "--", path]);
+  if (logResult.code !== 0) return undefined;
+  const commitHash = logResult.stdout.trim();
+  if (commitHash === "") return undefined;
+  const showResult = await runGit(cwd, ["show", "--no-ext-diff", "--color=never", "--format=", "--", path]);
+  if (showResult.code !== 0) return undefined;
+  return { path, staged: false, hash: hash(showResult.stdout), diff: showResult.stdout, truncated: showResult.truncated, committed: true };
 }
 
 async function isUntracked(cwd: string, path: string): Promise<boolean> {

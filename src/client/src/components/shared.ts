@@ -217,6 +217,10 @@ export const workspacePanelStyles = css`
   .diff-section:last-child { border-bottom: 0; }
   .viewer-header { position: sticky; top: 0; display: flex; justify-content: space-between; gap: 8px; padding: 8px; border-bottom: 1px solid var(--pi-border-muted); background: var(--pi-bg); }
   .viewer-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .diff-status { text-transform: uppercase; font-size: 10px; letter-spacing: .04em; border: 1px solid var(--pi-border-muted); border-radius: 999px; padding: 1px 6px; color: var(--pi-muted); }
+  .diff-status.committed { border-color: var(--pi-info-border); color: var(--pi-info); }
+  .diff-status.staged { border-color: var(--pi-success-border); color: var(--pi-success); }
+  .diff-status.unstaged { border-color: var(--pi-warning-border); color: var(--pi-warning); }
   code-viewer, unified-diff-viewer { flex: 1 1 auto; min-height: 0; }
   .image-preview { flex: 1 1 auto; min-height: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 16px; }
   .image-preview img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border: 1px solid var(--pi-border-muted); border-radius: 8px; background-color: var(--pi-surface); background-image: linear-gradient(45deg, color-mix(in srgb, var(--pi-border-muted) 45%, transparent) 25%, transparent 25%), linear-gradient(-45deg, color-mix(in srgb, var(--pi-border-muted) 45%, transparent) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--pi-border-muted) 45%, transparent) 75%), linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--pi-border-muted) 45%, transparent) 75%); background-position: 0 0, 0 8px, 8px -8px, -8px 0; background-size: 16px 16px; box-shadow: 0 8px 24px var(--pi-shadow-soft); }

@@ -404,6 +404,7 @@ export interface GitDiffResponse {
   hash: string;
   diff: string;
   truncated: boolean;
+  committed?: boolean;
 }
 
 export interface TerminalInfo {
