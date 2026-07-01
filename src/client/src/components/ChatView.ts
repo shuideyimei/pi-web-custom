@@ -9,6 +9,7 @@ import type { SessionActivity, SessionStatus } from "../api";
 import { buildSessionCompletionCards, type SessionCompletionArtifactCard, type SessionCompletionEditCard, type SessionCompletionFileRow } from "../sessionCompletionCards";
 import { buildSessionWorkSummary, type SessionWorkSummary } from "../sessionWorkSummary";
 import type { ChatLine, ChatPart } from "./shared";
+import { assistantCompletionFooterKeys } from "./assistantCompletionFooter";
 import { chatStyles } from "./shared";
 import { renderRoleIcon, roleIconStyles } from "./roleIcons";
 import { buildTimelineNodes, type TimelineNode, type TimelineNodeStatus, type ToolAggregation } from "./timelineAdapter";
@@ -201,7 +202,7 @@ export class ChatView extends LitElement {
   override render() {
     const nodes = this.computedTimelineNodes();
     const streamingNodeKey = this.streamingNodeKey(nodes);
-    const assistantFooterKeys = this.assistantFooterKeys(nodes, streamingNodeKey);
+    const assistantFooterKeys = assistantCompletionFooterKeys(nodes, { streamingNodeKey, isSessionLive: this.isSessionLive() });
     const responseSummaries = this.responseSummariesByAssistantKey(nodes, assistantFooterKeys);
     return html`
       <div class="chat-wrap">
@@ -314,27 +315,6 @@ export class ChatView extends LitElement {
       if (node?.type === "assistant" || node?.type === "thinking" || node?.type === "step") return node.key;
     }
     return undefined;
-  }
-
-  private assistantFooterKeys(nodes: readonly TimelineNode[], streamingNodeKey: string | undefined): Set<string> {
-    const footerKeys = new Set<string>();
-    let latestAssistantKey: string | undefined;
-    for (const node of nodes) {
-      if (node.type === "user") {
-        this.addCompletedAssistantFooterKey(footerKeys, latestAssistantKey, streamingNodeKey);
-        latestAssistantKey = undefined;
-        continue;
-      }
-      if (node.type === "assistant") latestAssistantKey = node.key;
-    }
-    this.addCompletedAssistantFooterKey(footerKeys, latestAssistantKey, streamingNodeKey);
-    return footerKeys;
-  }
-
-  private addCompletedAssistantFooterKey(footerKeys: Set<string>, assistantKey: string | undefined, streamingNodeKey: string | undefined): void {
-    if (assistantKey === undefined) return;
-    if (assistantKey === streamingNodeKey && this.isSessionLive()) return;
-    footerKeys.add(assistantKey);
   }
 
   private responseSummariesByAssistantKey(nodes: readonly TimelineNode[], assistantFooterKeys: ReadonlySet<string>): Map<string, SessionWorkSummary> {
