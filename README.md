@@ -11,10 +11,10 @@
   <img src="display_video/pi-web-demo.png" alt="PI WEB 界面截图" width="100%" />
 </p>
 
-<video controls muted playsinline width="100%" src="display_video/pi-web-demo.mov"></video>
+<video controls muted playsinline width="100%" src="display_video/pi-web-demo.mp4"></video>
 
 <p align="center">
-  <a href="display_video/pi-web-demo.mov">▶ 无法直接播放时，点击查看演示录屏</a>
+  <a href="display_video/pi-web-demo.mp4">▶ 无法直接播放时，点击查看演示录屏</a>
 </p>
 
 PI WEB 是 [Pi Coding Agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) 的 Web UI，用于在真实工作区中运行、管理和恢复持久化的 Pi Coding Agent 会话。它让浏览器成为控制界面，而会话、终端、仓库和构建缓存留在本机、工作站或服务器上持续运行。

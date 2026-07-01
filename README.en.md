@@ -11,10 +11,10 @@ Language: [中文](README.md) | English
   <img src="display_video/pi-web-demo.png" alt="PI WEB interface screenshot" width="100%" />
 </p>
 
-<video controls muted playsinline width="100%" src="display_video/pi-web-demo.mov"></video>
+<video controls muted playsinline width="100%" src="display_video/pi-web-demo.mp4"></video>
 
 <p align="center">
-  <a href="display_video/pi-web-demo.mov">▶ Watch the demo recording if it does not play inline</a>
+  <a href="display_video/pi-web-demo.mp4">▶ Watch the demo recording if it does not play inline</a>
 </p>
 
 PI WEB is a web UI for [Pi Coding Agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent). It runs, manages, and resumes persistent Pi Coding Agent sessions in real workspaces. Your browser is the control surface while sessions, terminals, repositories, and build caches stay on your machine, workstation, or server.
