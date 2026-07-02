@@ -158,6 +158,7 @@ export const appStyles = css`
     main.navigation-view .mobile-navigation-panel project-list[collapsed],
     main.navigation-view .mobile-navigation-panel workspace-list[collapsed],
     main.navigation-view .mobile-navigation-panel session-list[collapsed] { flex: 0 0 auto; min-height: auto; overflow: hidden; }
+    main.home-view chat-view, main.home-view prompt-editor, main.home-view status-bar { display: none; }
   }
   status-bar { flex: 0 0 auto; }
   chat-view { flex: 1 1 auto; min-height: 0; overflow: hidden; }
@@ -229,9 +230,9 @@ export const workspacePanelStyles = css`
 `;
 
 export const listStyles = css`
-  :host { display: flex; flex-direction: column; min-height: 0; overflow: hidden; color: var(--pi-text); font: 14px system-ui, sans-serif; background: transparent; }
+  :host { display: flex; flex-direction: column; min-height: 0; overflow: hidden; color: var(--pi-text); font: 12.5px system-ui, sans-serif; background: transparent; }
   :host([collapsed]) { flex: 0 0 auto; min-height: auto; overflow: hidden; }
-  section { box-sizing: border-box; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 10px; }
+  section { box-sizing: border-box; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 10px; border: 0; background: transparent; }
   h2 { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--pi-muted); font-size: 12px; text-transform: uppercase; }
   .list-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
   button { border: 1px solid var(--pi-glass-border); border-radius: 8px; background: var(--pi-glass-bg); color: var(--pi-text); padding: 7px 9px; cursor: pointer; }
@@ -245,12 +246,12 @@ export const listStyles = css`
   .section-toggle small { display: inline; color: inherit; font-size: inherit; }
   .action-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 6px 0; cursor: pointer; }
   .action-row:focus-visible { outline: 2px solid var(--pi-accent); outline-offset: 2px; border-radius: 8px; }
-  .action-row.selected .action-main, .action-row.selected .action-menu-toggle { border-color: color-mix(in srgb, var(--pi-text) 20%, transparent); background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
+  .action-row.selected .action-main, .action-row.selected .action-menu-toggle { background: var(--pi-selection-bg); }
   .action-row.archived .action-main { color: var(--pi-muted); }
-  .action-main { position: relative; box-sizing: border-box; min-width: 0; width: 100%; border: 1px solid var(--pi-glass-border); border-top-right-radius: 0; border-bottom-right-radius: 0; border-top-left-radius: 8px; border-bottom-left-radius: 8px; background: var(--pi-glass-bg); color: var(--pi-text); padding: 7px 22px 7px calc(9px + var(--depth, 0) * 16px); text-align: left; }
-  .action-name { display: -webkit-box; max-height: 2.5em; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  .action-row:not(.selected):hover .action-main { background: var(--pi-glass-highlight); }
-  .workspace-row .action-main { border-radius: 8px 0 0 8px; }
+  .action-main { position: relative; box-sizing: border-box; min-width: 0; width: 100%; border: 0; border-radius: 6px; background: transparent; color: var(--pi-text); padding: 6px 22px 6px calc(9px + var(--depth, 0) * 16px); text-align: left; }
+  .action-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
+  .action-row:not(.selected):hover .action-main { background: var(--pi-hover-overlay); }
+  .workspace-row .action-main { border-radius: 6px; }
   .workspace-primary { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
   .workspace-primary-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-status { flex: 0 0 auto; color: var(--pi-warning); font-size: 12px; }
@@ -307,14 +308,14 @@ export const listStyles = css`
   .activity-indicator.sending::before { background: var(--pi-warning); animation: activity-sending-spin 1.5s linear infinite; }
   .activity-indicator.sending::after { background: var(--pi-warning); animation: activity-sending-glow 1.5s linear infinite; }
   .action-menu { position: relative; align-self: stretch; }
-  .action-menu-toggle { display: grid; place-items: center; height: 100%; min-width: 32px; padding: 0; color: var(--pi-muted); border: 1px solid var(--pi-glass-border); border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; background: var(--pi-glass-bg); }
-  .action-menu-toggle:hover { color: var(--pi-text); background: var(--pi-glass-highlight); }
+  .action-menu-toggle { display: grid; place-items: center; height: 100%; min-width: 32px; padding: 0; color: var(--pi-muted); border: 0; border-radius: 6px; background: transparent; }
+  .action-menu-toggle:hover { color: var(--pi-text); background: var(--pi-hover-overlay); }
   .action-menu-panel { position: fixed; z-index: 50; box-sizing: border-box; min-width: min(120px, calc(100vw - 16px)); overflow: auto; padding: 4px; border: 1px solid var(--pi-border); border-radius: 8px; background: var(--pi-surface); box-shadow: 0 8px 24px var(--pi-shadow); overflow-wrap: anywhere; }
   .action-menu-panel button { display: block; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; border: 0; background: transparent; color: var(--pi-text); }
   .action-menu-panel button:hover { background: var(--pi-selection-bg); }
   button.selected { border-color: color-mix(in srgb, var(--pi-text) 20%, transparent); background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  small { display: block; color: var(--pi-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  small { display: block; color: var(--pi-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
   .workspace-label { min-width: 0; display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; overflow: hidden; white-space: nowrap; }
   .workspace-label-base, .workspace-label-item, .workspace-label-render { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .workspace-label-item, .workspace-label-render, .workspace-label-separator { color: var(--pi-muted); }

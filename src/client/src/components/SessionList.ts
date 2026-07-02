@@ -460,11 +460,12 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
     .bulk-row.selecting { padding: 6px; border: 1px solid var(--pi-border-muted); border-radius: 8px; background: color-mix(in srgb, var(--pi-surface) 65%, transparent); }
     button.danger, .action-menu-panel button.danger { color: var(--pi-danger); }
     button.danger:hover, .action-menu-panel button.danger:hover { background: color-mix(in srgb, var(--pi-danger) 14%, transparent); }
-    .action-row.bulk-selected .action-main { border-color: var(--pi-accent); box-shadow: inset 3px 0 0 var(--pi-accent); }
+    .action-row.bulk-selected .action-main { background: color-mix(in srgb, var(--pi-accent) 12%, transparent); box-shadow: inset 3px 0 0 var(--pi-accent); }
+    session-list .action-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .action-main.selecting { padding-left: calc(32px + var(--depth, 0) * 16px); }
     .session-checkbox { position: absolute; top: 9px; left: calc(8px + var(--depth, 0) * 16px); z-index: 2; margin: 0; }
     .action-menu { z-index: 30; display: flex; }
-    .action-menu-toggle { position: relative; z-index: 30; width: 44px; min-width: 44px; pointer-events: auto; touch-action: manipulation; }
+    .action-menu-toggle { position: relative; z-index: 30; width: 32px; min-width: 32px; pointer-events: auto; touch-action: manipulation; }
     .action-menu-panel { z-index: 10000; }
   `];
 }
