@@ -19,6 +19,7 @@ import { registerGitRoutes } from "./gitRoutes.js";
 import { registerTerminalProxyRoutes } from "./terminalProxyRoutes.js";
 import { registerWorkspaceDeletionRoutes } from "./workspaces/workspaceDeletionRoutes.js";
 import { createFilePiWebConfigService, registerConfigRoutes, type PiWebConfigService } from "./configRoutes.js";
+import { PiPackageService } from "./piPackageService.js";
 import { PiWebPluginService } from "./piWebPluginService.js";
 import { createPiWebStatusCache } from "./piWebStatusCache.js";
 import { getPiWebRuntime, getPiWebStatus, getPiWebVersionStatus } from "./piWebStatus.js";
@@ -34,6 +35,7 @@ export interface AppDependencies {
   machines?: MachineService;
   sessionDaemon?: SessionProxyDaemon;
   piWebPlugins?: Pick<PiWebPluginService, "manifest" | "plugins" | "readAsset">;
+  piPackages?: Pick<PiPackageService, "packages" | "install">;
   config?: PiWebConfigService;
   clientDist?: string | false;
   logger?: FastifyServerOptions["logger"];
@@ -115,6 +117,21 @@ function registerLocalFileSuggestionRoutes(app: FastifyInstance, projects: Proje
   });
 }
 
+function normalizeOptionalRequestCwd(cwd: unknown): string | undefined {
+  return cwd === undefined || cwd === "" ? undefined : normalizeRequestCwd(cwd);
+}
+
+function optionalCwdField(cwd: unknown): { cwd?: string } {
+  const normalized = normalizeOptionalRequestCwd(cwd);
+  return normalized === undefined ? {} : { cwd: normalized };
+}
+
+function parsePackageScope(scope: unknown): "user" | "project" | undefined {
+  if (scope === undefined || scope === "") return undefined;
+  if (scope === "user" || scope === "project") return scope;
+  throw new Error("Package scope must be user or project");
+}
+
 export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? true, ...(deps.bodyLimit === undefined ? {} : { bodyLimit: deps.bodyLimit }) });
   await app.register(fastifyWebsocket);
@@ -122,6 +139,7 @@ export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInsta
   const projects = deps.projects ?? new ProjectService(new ProjectStore());
   const workspaces = deps.workspaces ?? new WorkspaceService();
   const piWebPlugins = deps.piWebPlugins ?? new PiWebPluginService();
+  const piPackages = deps.piPackages ?? new PiPackageService();
   const configService = deps.config ?? createFilePiWebConfigService();
   const sessionDaemon = deps.sessionDaemon ?? new SessionDaemonClient();
   const piWebStatusCache = createPiWebStatusCache(() => getPiWebStatus(sessionDaemon), {
@@ -145,6 +163,23 @@ export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInsta
   app.get("/api/pi-web/version", async () => getPiWebVersionStatus(sessionDaemon));
   app.get("/api/pi-web/runtime", async () => getPiWebRuntime(sessionDaemon));
   app.get("/api/plugins", async () => piWebPlugins.plugins());
+  app.get<{ Querystring: { cwd?: string } }>("/api/pi/packages", async (request, reply) => {
+    try {
+      return await piPackages.packages(normalizeOptionalRequestCwd(request.query.cwd));
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+  app.post<{ Body: { source?: unknown; scope?: unknown; cwd?: unknown } }>("/api/pi/packages/install", async (request, reply) => {
+    try {
+      const source = request.body.source;
+      if (typeof source !== "string") throw new Error("Package source is required");
+      const scope = parsePackageScope(request.body.scope);
+      return await piPackages.install({ source, ...(scope === undefined ? {} : { scope }), ...optionalCwdField(request.body.cwd) });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
   registerConfigRoutes(app, configService);
 
   registerMachineRoutes(app, machines);

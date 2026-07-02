@@ -1,10 +1,11 @@
-import { css, html, LitElement, type TemplateResult } from "lit";
+import { css, html, LitElement, type PropertyValues, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { AppAction } from "../actions";
-import { configApi, pluginsApi, type PiWebConfigResponse, type PiWebConfigValues, type PiWebPluginsResponse } from "../api";
+import { configApi, packagesApi, pluginsApi, type PiPackageScope, type PiPackagesResponse, type PiWebConfigResponse, type PiWebConfigValues, type PiWebPluginsResponse } from "../api";
 import type { SettingsSection } from "../settingsRoute";
 import "./settings/SettingsGeneralPanel";
 import "./settings/SettingsSessiondPanel";
+import "./settings/SettingsMarketplacePanel";
 import "./settings/SettingsPluginsPanel";
 import "./settings/SettingsShortcutsPanel";
 
@@ -12,26 +13,37 @@ import "./settings/SettingsShortcutsPanel";
 export class SettingsDialog extends LitElement {
   @property({ attribute: false }) section: SettingsSection = "general";
   @property({ attribute: false }) actions: AppAction[] = [];
+  @property({ attribute: false }) projectCwd: string | undefined;
   @property({ attribute: false }) onNavigate?: (section: SettingsSection) => void;
   @property({ attribute: false }) onClose?: () => void;
   @property({ attribute: false }) onConfigSaved?: (config: PiWebConfigValues) => void;
   @state() private configResponse: PiWebConfigResponse | undefined;
   @state() private pluginsResponse: PiWebPluginsResponse | undefined;
+  @state() private packagesResponse: PiPackagesResponse | undefined;
   @state() private loading = true;
+  @state() private packagesLoading = true;
   @state() private saving = false;
+  @state() private installingPackage = false;
   @state() private error = "";
+  @state() private packageError = "";
   @state() private savedMessage = "";
+  @state() private packageSavedMessage = "";
   private savedMessageTimer: number | undefined;
 
   override connectedCallback(): void {
     super.connectedCallback();
     void this.loadConfig();
+    void this.loadPackages();
   }
 
   override disconnectedCallback(): void {
     if (this.savedMessageTimer !== undefined) window.clearTimeout(this.savedMessageTimer);
     this.savedMessageTimer = undefined;
     super.disconnectedCallback();
+  }
+
+  protected override updated(changed: PropertyValues<this>): void {
+    if (changed.has("projectCwd")) void this.loadPackages();
   }
 
   override render(): TemplateResult {
@@ -49,6 +61,7 @@ export class SettingsDialog extends LitElement {
             <nav class="settings-nav" aria-label="Settings sections">
               ${this.renderNavButton("general", "General", "Server config")}
               ${this.renderNavButton("sessiond", "Session daemon", "Runtime settings")}
+              ${this.renderNavButton("marketplace", "Marketplace", "Install packages")}
               ${this.renderNavButton("plugins", "Plugins", "Enable and disable")}
               ${this.renderNavButton("shortcuts", "Keyboard", "Shortcuts")}
             </nav>
@@ -87,6 +100,20 @@ export class SettingsDialog extends LitElement {
           .onReload=${() => this.loadConfig()}
           .onSave=${(config: PiWebConfigValues) => this.saveConfig(config)}
         ></settings-shortcuts-panel>
+      `;
+    }
+    if (this.section === "marketplace") {
+      return html`
+        <settings-marketplace-panel
+          .packagesResponse=${this.packagesResponse}
+          .projectCwd=${this.projectCwd}
+          .loading=${this.packagesLoading}
+          .installing=${this.installingPackage}
+          .error=${this.packageError}
+          .savedMessage=${this.packageSavedMessage}
+          .onReload=${() => this.loadPackages()}
+          .onInstallPackage=${(source: string, scope: PiPackageScope) => this.installPackage(source, scope)}
+        ></settings-marketplace-panel>
       `;
     }
     if (this.section === "plugins") {
@@ -141,6 +168,35 @@ export class SettingsDialog extends LitElement {
       this.error = `Failed to load settings: ${errorMessage(error)}`;
     } finally {
       this.loading = false;
+    }
+  }
+
+  private async loadPackages(): Promise<void> {
+    this.packagesLoading = true;
+    this.packageError = "";
+    try {
+      this.packagesResponse = await packagesApi.packages(this.projectCwd);
+    } catch (error) {
+      this.packageError = `Failed to load packages: ${errorMessage(error)}`;
+    } finally {
+      this.packagesLoading = false;
+    }
+  }
+
+  private async installPackage(source: string, scope: PiPackageScope): Promise<void> {
+    if (this.installingPackage) return;
+    this.installingPackage = true;
+    this.packageError = "";
+    this.packageSavedMessage = "";
+    try {
+      const response = await packagesApi.installPackage(source, { scope, ...(scope === "project" && this.projectCwd !== undefined ? { cwd: this.projectCwd } : {}) });
+      this.packagesResponse = { packages: response.packages };
+      this.packageSavedMessage = `Installed ${response.package.source}. Reload active Pi sessions to load new extensions/skills; reload the browser tab to load PI WEB plugins.`;
+      await this.refreshPlugins();
+    } catch (error) {
+      this.packageError = `Failed to install package: ${errorMessage(error)}`;
+    } finally {
+      this.installingPackage = false;
     }
   }
 

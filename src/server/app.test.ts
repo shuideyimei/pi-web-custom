@@ -15,7 +15,8 @@ import type { SessionProxyDaemon } from "./sessiond/sessionProxyRoutes.js";
 import { PI_WEB_CAPABILITIES } from "../shared/capabilities.js";
 import { machineScopedPluginId } from "../shared/machinePluginIds.js";
 import { MAX_IMAGE_PREVIEW_BYTES } from "../shared/workspaceFiles.js";
-import type { PiWebConfigResponse, PiWebConfigValues } from "../shared/apiTypes.js";
+import type { PiPackageInstallResponse, PiPackagesResponse, PiWebConfigResponse, PiWebConfigValues } from "../shared/apiTypes.js";
+import type { PiPackageInstallInput } from "./piPackageService.js";
 import type { Project, Workspace } from "./types.js";
 
 let app: FastifyInstance;
@@ -24,6 +25,10 @@ let projectDir: string;
 let remoteClient: MachineClient | undefined;
 let sessionDaemonRequests: CapturedSessionDaemonRequest[];
 let piWebConfig: PiWebConfigValues;
+let piPackages: {
+  packages: (cwd?: string) => Promise<PiPackagesResponse>;
+  install: (input: PiPackageInstallInput) => Promise<PiPackageInstallResponse>;
+};
 
 beforeEach(async () => {
   tempDir = await realpath(await mkdtemp(join(tmpdir(), "pi-web-app-test-")));
@@ -31,6 +36,18 @@ beforeEach(async () => {
   remoteClient = undefined;
   sessionDaemonRequests = [];
   piWebConfig = {};
+  piPackages = {
+    packages: vi.fn((cwd?: string) => Promise.resolve({
+      packages: [{ source: cwd === undefined ? "npm:pi-mcp-adapter" : "npm:bigpowers", scope: cwd === undefined ? "user" as const : "project" as const, filtered: false, installedPath: cwd === undefined ? join(tempDir, "user-package") : join(cwd, ".pi", "npm", "bigpowers") }],
+    })),
+    install: vi.fn((input: PiPackageInstallInput) => {
+      const scope = input.scope ?? "user";
+      return Promise.resolve({
+        package: { source: input.source, scope, filtered: false, installedPath: join(tempDir, "installed") },
+        packages: [{ source: input.source, scope, filtered: false, installedPath: join(tempDir, "installed") }],
+      });
+    }),
+  };
   app = await buildApp({
     projects: new ProjectService(new ProjectStore(join(tempDir, "projects.json"))),
     workspaces: new WorkspaceService(),
@@ -57,6 +74,7 @@ beforeEach(async () => {
       plugins: () => Promise.resolve({ plugins: [{ id: "fake", module: "/pi-web-plugins/fake/plugin.js?v=1", source: "test", scope: "local", machineSpecific: false, enabled: true }] }),
       readAsset: (pluginId, assetPath) => Promise.resolve(pluginId === "fake" && assetPath === "plugin.js" ? { content: Buffer.from("export default {};"), contentType: "application/javascript; charset=utf-8" } : undefined),
     },
+    piPackages,
     clientDist: false,
     logger: false,
   });
@@ -405,6 +423,27 @@ describe("buildApp", () => {
 
     const missingResponse = await app.inject({ method: "GET", url: "/pi-web-plugins/fake/missing.js" });
     expect(missingResponse.statusCode).toBe(404);
+  });
+
+  it("lists and installs Pi packages", async () => {
+    const packagesResponse = await app.inject({ method: "GET", url: `/api/pi/packages?cwd=${encodeURIComponent(projectDir)}` });
+    expect(packagesResponse.statusCode).toBe(200);
+    expect(packagesResponse.json()).toEqual({ packages: [{ source: "npm:bigpowers", scope: "project", filtered: false, installedPath: join(projectDir, ".pi", "npm", "bigpowers") }] });
+    expect(piPackages.packages).toHaveBeenCalledWith(projectDir);
+
+    const installResponse = await app.inject({ method: "POST", url: "/api/pi/packages/install", payload: { source: "pi install npm:pi-mcp-adapter", scope: "project", cwd: projectDir } });
+    expect(installResponse.statusCode).toBe(200);
+    expect(installResponse.json()).toEqual({
+      package: { source: "pi install npm:pi-mcp-adapter", scope: "project", filtered: false, installedPath: join(tempDir, "installed") },
+      packages: [{ source: "pi install npm:pi-mcp-adapter", scope: "project", filtered: false, installedPath: join(tempDir, "installed") }],
+    });
+    expect(piPackages.install).toHaveBeenCalledWith({ source: "pi install npm:pi-mcp-adapter", scope: "project", cwd: projectDir });
+  });
+
+  it("rejects invalid Pi package install requests", async () => {
+    const response = await app.inject({ method: "POST", url: "/api/pi/packages/install", payload: { scope: "user" } });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "Package source is required" });
   });
 
   it("rewrites and proxies remote machine plugin manifests and assets", async () => {

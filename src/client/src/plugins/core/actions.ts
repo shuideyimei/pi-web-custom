@@ -6,6 +6,8 @@ import { selectedMachineId } from "../../controllers/types";
 import { isWorkspaceDeletionPending } from "../../workspaceDeletion";
 import type { PluginAction } from "../types";
 
+const PI_PACKAGE_MARKETPLACE_URL = "https://pi.dev/packages";
+
 export function createCoreActions(): PluginAction[] {
   return [
     {
@@ -88,6 +90,34 @@ export function createCoreActions(): PluginAction[] {
       shortcut: "mod+,",
       group: "Preferences",
       run: (context) => { context.piWebUnstable?.openSettings?.(); },
+    },
+    {
+      id: "marketplace.open",
+      title: "Open Pi Package Marketplace",
+      description: "Browse and install Pi plugins, MCP integrations, skills, prompts, and themes",
+      group: "Marketplace",
+      run: (context) => { context.piWebUnstable?.openSettings?.("marketplace"); },
+    },
+    {
+      id: "marketplace.plugins",
+      title: "Browse Pi Plugin Packages",
+      description: "Open the official Pi extension/plugin marketplace in a new tab",
+      group: "Marketplace",
+      run: () => { openMarketplace(`${PI_PACKAGE_MARKETPLACE_URL}?type=extension`); },
+    },
+    {
+      id: "marketplace.mcp",
+      title: "Browse Pi MCP Packages",
+      description: "Find MCP adapters and MCP-related packages for Pi",
+      group: "Marketplace",
+      run: () => { openMarketplace(`${PI_PACKAGE_MARKETPLACE_URL}?q=mcp`); },
+    },
+    {
+      id: "marketplace.skills",
+      title: "Browse Pi Skill Packages",
+      description: "Open the official Pi skill package marketplace in a new tab",
+      group: "Marketplace",
+      run: () => { openMarketplace(`${PI_PACKAGE_MARKETPLACE_URL}?type=skill`); },
     },
     {
       id: "app.reload-page",
@@ -200,6 +230,10 @@ export function createCoreActions(): PluginAction[] {
       run: (context) => context.stopActiveWork(),
     },
   ];
+}
+
+function openMarketplace(url: string): void {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function hasWorkspace(context: { state: AppState }): boolean {

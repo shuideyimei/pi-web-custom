@@ -1,4 +1,4 @@
-import type { DeleteWorkspaceFileResponse, FileSuggestion, MoveWorkspaceFileOptions, PiWebConfigValues, PromptAttachment, RunTerminalCommandInput, SessionRef, TerminalCommandRun, TerminalCommandRunFilter, WriteWorkspaceFileOptions } from "../../../shared/apiTypes";
+import type { DeleteWorkspaceFileResponse, FileSuggestion, MoveWorkspaceFileOptions, PiPackageScope, PiWebConfigValues, PromptAttachment, RunTerminalCommandInput, SessionRef, TerminalCommandRun, TerminalCommandRunFilter, WriteWorkspaceFileOptions } from "../../../shared/apiTypes";
 import { request } from "./http";
 import {
   arrayOf,
@@ -23,6 +23,8 @@ import {
   parseModelSelectionResponse,
   parseMoveWorkspaceFileResponse,
   parseOAuthFlowState,
+  parsePiPackageInstallResponse,
+  parsePiPackagesResponse,
   parsePiWebConfigResponse,
   parsePiWebPluginsResponse,
   parsePiWebRuntimeResponse,
@@ -103,6 +105,14 @@ export const configApi = {
 
 export const pluginsApi = {
   plugins: () => request("/api/plugins", parsePiWebPluginsResponse),
+};
+
+export const packagesApi = {
+  packages: (cwd?: string) => request(`/api/pi/packages${cwd === undefined || cwd === "" ? "" : `?cwd=${encodeURIComponent(cwd)}`}`, parsePiPackagesResponse),
+  installPackage: (source: string, options: { scope?: PiPackageScope; cwd?: string } = {}) => request("/api/pi/packages/install", parsePiPackageInstallResponse, {
+    method: "POST",
+    body: JSON.stringify({ source, ...(options.scope === undefined ? {} : { scope: options.scope }), ...(options.cwd === undefined || options.cwd === "" ? {} : { cwd: options.cwd }) }),
+  }),
 };
 
 export const activityApi = {

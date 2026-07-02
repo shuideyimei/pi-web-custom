@@ -11,6 +11,7 @@ export const WEB_SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: "model", description: "Select or set the current model", source: "builtin" },
   { name: "thinking", description: "Select or set the current thinking level", source: "builtin" },
   { name: "settings", description: "Open Web settings", source: "builtin" },
+  { name: "marketplace", description: "Open Pi package marketplace and installer", source: "builtin" },
   { name: "hotkeys", description: "Open keyboard shortcut settings", source: "builtin" },
   { name: "login", description: "Configure provider authentication", source: "builtin" },
   { name: "logout", description: "Remove provider authentication", source: "builtin" },
@@ -48,7 +49,8 @@ export function slashCommandArguments(args: string): string[] {
 
 export function settingsSectionFromSlashArgument(value: string | undefined): SettingsSection | undefined {
   if (value === undefined || value === "" || value === "general") return "general";
-  if (value === "sessiond" || value === "plugins" || value === "shortcuts") return value;
+  if (value === "sessiond" || value === "marketplace" || value === "plugins" || value === "shortcuts") return value;
+  if (value === "market" || value === "packages" || value === "install") return "marketplace";
   if (value === "hotkeys" || value === "keybindings" || value === "keys") return "shortcuts";
   return undefined;
 }

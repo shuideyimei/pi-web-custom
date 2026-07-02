@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PI_WEB_CAPABILITIES } from "../../../shared/capabilities";
-import { parseCommandResult, parseFileContentResponse, parseFileSuggestion, parseGitStatusResponse, parseMessagePage, parsePiWebConfigResponse, parsePiWebPluginsResponse, parsePiWebRuntimeResponse, parseSessionStatus, parseSlashCommand, parseTerminalCommandRun, parseTerminalInfo, parseWorkspace, parseWorkspaceActivityResponse } from "./parsers";
+import { parseCommandResult, parseFileContentResponse, parseFileSuggestion, parseGitStatusResponse, parseMessagePage, parsePiPackageInstallResponse, parsePiPackagesResponse, parsePiWebConfigResponse, parsePiWebPluginsResponse, parsePiWebRuntimeResponse, parseSessionStatus, parseSlashCommand, parseTerminalCommandRun, parseTerminalInfo, parseWorkspace, parseWorkspaceActivityResponse } from "./parsers";
 
 describe("API parsers", () => {
   it("parses PI WEB config responses", () => {
@@ -29,6 +29,21 @@ describe("API parsers", () => {
       },
       capabilities: [PI_WEB_CAPABILITIES.sessionsDeleteArchived],
     })).toMatchObject({ capabilities: [PI_WEB_CAPABILITIES.sessionsDeleteArchived] });
+  });
+
+  it("parses Pi package responses", () => {
+    expect(parsePiPackagesResponse({
+      packages: [{ source: "npm:pi-mcp-adapter", scope: "user", filtered: false, installedPath: "/home/me/.pi/agent/npm/node_modules/pi-mcp-adapter" }],
+    })).toEqual({
+      packages: [{ source: "npm:pi-mcp-adapter", scope: "user", filtered: false, installedPath: "/home/me/.pi/agent/npm/node_modules/pi-mcp-adapter" }],
+    });
+    expect(parsePiPackageInstallResponse({
+      package: { source: "npm:bigpowers", scope: "project", filtered: false },
+      packages: [{ source: "npm:bigpowers", scope: "project", filtered: false }],
+    })).toEqual({
+      package: { source: "npm:bigpowers", scope: "project", filtered: false },
+      packages: [{ source: "npm:bigpowers", scope: "project", filtered: false }],
+    });
   });
 
   it("parses PI WEB plugin status responses", () => {

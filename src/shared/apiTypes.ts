@@ -84,6 +84,23 @@ export interface PiWebConfigValues {
 }
 
 export type PiWebPluginScope = "bundled" | "local" | "user" | "project";
+export type PiPackageScope = "user" | "project";
+
+export interface PiPackageInfo {
+  source: string;
+  scope: PiPackageScope;
+  filtered: boolean;
+  installedPath?: string;
+}
+
+export interface PiPackagesResponse {
+  packages: PiPackageInfo[];
+}
+
+export interface PiPackageInstallResponse {
+  package: PiPackageInfo;
+  packages: PiPackageInfo[];
+}
 
 export interface PiWebPluginInfo {
   id: string;
