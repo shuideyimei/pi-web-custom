@@ -259,6 +259,42 @@ describe("PiSessionService", () => {
     await service.dispose();
   });
 
+  it("builds usage summaries from session files without opening inactive runtimes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pi-web-usage-"));
+    try {
+      const path = join(dir, "session.jsonl");
+      await writeFile(path, [
+        JSON.stringify({ type: "session", id: "usage-session", timestamp: "2026-01-01T08:00:00.000Z", cwd: "/workspace" }),
+        JSON.stringify({ type: "model_change", provider: "openai", modelId: "gpt-5" }),
+        JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: "hello" }] } }),
+        JSON.stringify({ type: "message", message: { role: "assistant", provider: "openai", model: "gpt-5", content: [{ type: "toolCall", name: "read" }, { type: "text", text: "done" }], usage: { input: 10, output: 20, cacheRead: 3, cacheWrite: 2, totalTokens: 35, cost: { total: 0.1234 } } } }),
+      ].join("\n"));
+      const open = vi.fn(() => fakeSessionManager());
+      const createAgentRuntime = vi.fn(() => Promise.reject(new Error("usage summary should not create inactive runtimes")));
+      const service = new PiSessionService(new CapturingSessionEventHub(), {
+        createAgentRuntime,
+        sessionManager: {
+          create: () => fakeSessionManager(),
+          list: () => Promise.resolve([]),
+          listAll: () => Promise.resolve([{ ...sessionRecord("usage-session"), path, modified: new Date("2026-01-01T09:00:00.000Z") }]),
+          open,
+        },
+        heartbeatIntervalMs: 60_000,
+      });
+
+      const summary = await service.usageSummary();
+
+      expect(open).not.toHaveBeenCalled();
+      expect(createAgentRuntime).not.toHaveBeenCalled();
+      expect(summary).toMatchObject({ totalSessions: 1, totalMessages: 2, totalTokens: 35, favoriteModel: { provider: "openai", id: "gpt-5" }, comparison: { text: "Total cost: $0.1234" } });
+      expect(summary.tokensByDay).toEqual([{ date: "2026-01-01", input: 10, output: 20, total: 35 }]);
+
+      await service.dispose();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("clears stale active activity once a previously active session becomes idle", async () => {
     vi.useFakeTimers();
     let service: PiSessionService | undefined;

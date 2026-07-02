@@ -1,4 +1,6 @@
+import { createReadStream } from "node:fs";
 import { open, readFile, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import type { Api, ImageContent, Model } from "@earendil-works/pi-ai";
 import {
   AuthStorage,
@@ -55,6 +57,8 @@ const noopLogger: PiSessionLogger = { info() { /* no-op */ }, warn() { /* no-op 
 function noop(): void {
   // Intentionally empty default unsubscribe callback.
 }
+
+const USAGE_SUMMARY_CACHE_MS = 60_000;
 
 function spawnTargetError(decision: Extract<SpawnTargetDecision, { allowed: false }>): Error {
   if (decision.reason === "not-registered") return new Error("Spawning session is not in a registered project");
@@ -362,6 +366,8 @@ export class PiSessionService {
   private readonly workspaceActivity: Pick<WorkspaceActivityService, "applySessionStatus" | "applySessionActivity" | "removeSession" | "reconcileSessionActivity"> | undefined;
   private readonly spawnTargets: SpawnTargetResolver | undefined;
   private readonly logger: PiSessionLogger;
+  private usageSummaryCache: { summary: TokenUsageSummary; createdAt: number } | undefined;
+  private usageSummaryRequest: Promise<TokenUsageSummary> | undefined;
 
   constructor(private readonly events: SessionEventHub, deps: PiSessionServiceDependencies = {}) {
     this.archiveStore = deps.archiveStore ?? new SessionArchiveStore();
@@ -862,6 +868,20 @@ export class PiSessionService {
   }
 
   async usageSummary(): Promise<TokenUsageSummary> {
+    const cached = this.usageSummaryCache;
+    if (cached !== undefined && Date.now() - cached.createdAt < USAGE_SUMMARY_CACHE_MS) return cached.summary;
+    if (this.usageSummaryRequest !== undefined) return this.usageSummaryRequest;
+    const request = this.collectUsageSummary().then((summary) => {
+      this.usageSummaryCache = { summary, createdAt: Date.now() };
+      return summary;
+    }).finally(() => {
+      if (this.usageSummaryRequest === request) this.usageSummaryRequest = undefined;
+    });
+    this.usageSummaryRequest = request;
+    return request;
+  }
+
+  private async collectUsageSummary(): Promise<TokenUsageSummary> {
     if (this.sessionManager.listAll === undefined) {
       return emptyTokenUsageSummary();
     }
@@ -883,16 +903,9 @@ export class PiSessionService {
     if (active !== undefined) {
       const session = active.runtime.session;
       const stats = session.getSessionStats();
-      return sessionStatsForUsageFromStats(stats, entry);
+      return sessionStatsForUsageFromStats(stats, entry, session.model === undefined ? undefined : modelToUsageModel(modelToClientModel(session.model)));
     }
-    const manager = this.sessionManager.open(entry.path);
-    const runtime = await this.createAgentRuntime(this.createRuntime, { cwd: entry.cwd, agentDir: this.agentDir, sessionManager: manager });
-    try {
-      const stats = runtime.session.getSessionStats();
-      return sessionStatsForUsageFromStats(stats, entry);
-    } finally {
-      await runtime.dispose();
-    }
+    return sessionStatsForUsageFromFile(entry);
   }
 
   private activeForPath(path: string): ActiveSession<PiSessionRuntime> | undefined {
@@ -1691,7 +1704,7 @@ interface SessionStatsForUsage {
   model: { provider: string; id: string; name?: string } | undefined;
 }
 
-function sessionStatsForUsageFromStats(stats: { sessionId: string; sessionFile?: string | undefined; totalMessages: number; userMessages: number; assistantMessages: number; toolCalls: number; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number }; cost: number }, entry: PiSessionListEntry): SessionStatsForUsage {
+function sessionStatsForUsageFromStats(stats: { sessionId: string; sessionFile?: string | undefined; totalMessages: number; userMessages: number; assistantMessages: number; toolCalls: number; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number }; cost: number }, entry: PiSessionListEntry, model?: SessionStatsForUsage["model"]): SessionStatsForUsage {
   return {
     sessionId: stats.sessionId,
     cwd: entry.cwd,
@@ -1703,8 +1716,84 @@ function sessionStatsForUsageFromStats(stats: { sessionId: string; sessionFile?:
     toolCalls: stats.toolCalls,
     tokens: stats.tokens,
     cost: stats.cost,
+    model,
+  };
+}
+
+async function sessionStatsForUsageFromFile(entry: PiSessionListEntry): Promise<SessionStatsForUsage> {
+  const stats: SessionStatsForUsage = {
+    sessionId: entry.id,
+    cwd: entry.cwd,
+    created: entry.created,
+    modified: entry.modified,
+    totalMessages: entry.messageCount,
+    userMessages: 0,
+    assistantMessages: 0,
+    toolCalls: 0,
+    tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    cost: 0,
     model: undefined,
   };
+  let parsedMessages = 0;
+  const lines = createInterface({ input: createReadStream(entry.path, { encoding: "utf8" }), crlfDelay: Infinity });
+  for await (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let record: unknown;
+    try {
+      record = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    applyUsageRecord(stats, record);
+    if (getString(record, "type") === "message") parsedMessages += 1;
+  }
+  if (parsedMessages > 0 || entry.messageCount === 0) stats.totalMessages = parsedMessages;
+  return stats;
+}
+
+function applyUsageRecord(stats: SessionStatsForUsage, record: unknown): void {
+  if (!isRecord(record)) return;
+  if (getString(record, "type") === "model_change") {
+    const provider = getString(record, "provider");
+    const id = getString(record, "modelId");
+    if (provider !== undefined && id !== undefined) stats.model = { provider, id };
+    return;
+  }
+  if (getString(record, "type") !== "message") return;
+  const message = getProperty(record, "message");
+  if (!isRecord(message)) return;
+  const role = getString(message, "role");
+  if (role === "user") stats.userMessages += 1;
+  if (role === "assistant") stats.assistantMessages += 1;
+  const content = getProperty(message, "content");
+  if (Array.isArray(content)) {
+    stats.toolCalls += content.filter((item) => isRecord(item) && getString(item, "type") === "toolCall").length;
+  }
+  const provider = getString(message, "provider");
+  const modelId = getString(message, "model");
+  if (provider !== undefined && modelId !== undefined) stats.model = { provider, id: modelId };
+  addMessageUsage(stats, getProperty(message, "usage"));
+}
+
+function addMessageUsage(stats: SessionStatsForUsage, usage: unknown): void {
+  if (!isRecord(usage)) return;
+  const input = getNumber(usage, "input") ?? 0;
+  const output = getNumber(usage, "output") ?? 0;
+  const cacheRead = getNumber(usage, "cacheRead") ?? 0;
+  const cacheWrite = getNumber(usage, "cacheWrite") ?? 0;
+  stats.tokens.input += input;
+  stats.tokens.output += output;
+  stats.tokens.cacheRead += cacheRead;
+  stats.tokens.cacheWrite += cacheWrite;
+  stats.tokens.total += getNumber(usage, "totalTokens") ?? getNumber(usage, "total") ?? input + output + cacheRead + cacheWrite;
+  const cost = getProperty(usage, "cost");
+  stats.cost += isRecord(cost) ? getNumber(cost, "total") ?? 0 : getNumber(usage, "cost") ?? 0;
+}
+
+function modelToUsageModel(model: ClientSessionModel): SessionStatsForUsage["model"] {
+  if (model.provider === undefined || model.id === undefined) return undefined;
+  return { provider: model.provider, id: model.id, ...(model.name === undefined ? {} : { name: model.name }) };
 }
 
 function emptyTokenUsageSummary(): TokenUsageSummary {
@@ -2236,6 +2325,11 @@ function getProperty(value: unknown, key: string): unknown {
 function getString(value: unknown, key: string): string | undefined {
   const property = getProperty(value, key);
   return typeof property === "string" ? property : undefined;
+}
+
+function getNumber(value: unknown, key: string): number | undefined {
+  const property = getProperty(value, key);
+  return typeof property === "number" && Number.isFinite(property) ? property : undefined;
 }
 
 function getBoolean(value: unknown, key: string): boolean | undefined {
