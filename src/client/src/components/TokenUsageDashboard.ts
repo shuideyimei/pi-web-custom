@@ -139,12 +139,15 @@ export class TokenUsageDashboard extends LitElement {
       <div class="heatmap-grid" style=${`--heatmap-weeks: ${String(weeks)}`}>
         ${days.map((day) => {
           const level = heatmapLevel(day.total, max);
+          const tooltip = heatmapTooltip(day);
           return html`
             <div
               class=${`heatmap-cell level-${String(level)}`}
-              title=${`${day.date}: ${formatNumber(day.total)} tokens`}
-              aria-label=${`${day.date}: ${formatNumber(day.total)} tokens`}
-            ></div>
+              title=${tooltip}
+              aria-label=${tooltip}
+            >
+              <span class="heatmap-tooltip" role="tooltip">${tooltip}</span>
+            </div>
           `;
         })}
       </div>
@@ -171,9 +174,9 @@ export class TokenUsageDashboard extends LitElement {
       min-height: 0;
       overflow: auto;
       background:
-        radial-gradient(circle at 50% 18%, rgba(255, 255, 255, .035), transparent 34%),
-        linear-gradient(180deg, #252525 0%, #1f1f1f 100%);
-      color: #f2f2f2;
+        radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--pi-accent) 8%, transparent), transparent 34%),
+        var(--pi-main-bg);
+      color: var(--pi-text);
     }
 
     .usage-page {
@@ -196,12 +199,12 @@ export class TokenUsageDashboard extends LitElement {
 
     h1 {
       margin: 0;
-      color: #f5f5f5;
+      color: var(--pi-text-bright);
       font-size: 24px;
       font-weight: 760;
       letter-spacing: -.035em;
       line-height: 1.08;
-      text-shadow: 0 1px 0 rgba(255, 255, 255, .03);
+      text-shadow: 0 1px 0 var(--pi-inset-highlight);
     }
 
     .panel {
@@ -209,16 +212,16 @@ export class TokenUsageDashboard extends LitElement {
       width: 100%;
       min-height: 318px;
       padding: 8px 11px 12px;
-      border: 1px solid rgba(255, 255, 255, .035);
+      border: 1px solid var(--pi-panel-border);
       border-radius: 7px 7px 0 0;
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, 0) 42%),
-        linear-gradient(135deg, #313131 0%, #292929 100%);
+        linear-gradient(180deg, color-mix(in srgb, var(--pi-text-bright) 4%, transparent), transparent 42%),
+        color-mix(in srgb, var(--pi-panel-bg) 78%, var(--pi-surface) 22%);
       box-shadow:
-        0 18px 34px rgba(0, 0, 0, .28),
-        0 2px 8px rgba(0, 0, 0, .18),
-        inset 0 1px 0 rgba(255, 255, 255, .055),
-        inset 0 -1px 0 rgba(0, 0, 0, .24);
+        0 18px 34px var(--pi-shadow),
+        0 2px 8px var(--pi-shadow-soft),
+        inset 0 1px 0 var(--pi-inset-highlight),
+        inset 0 -1px 0 var(--pi-shadow-soft);
     }
 
     .panel-toolbar {
@@ -242,18 +245,18 @@ export class TokenUsageDashboard extends LitElement {
       border: 0;
       cursor: pointer;
       font: inherit;
-      color: #b9b9b9;
+      color: var(--pi-muted);
       background: transparent;
       transition: background .12s ease, color .12s ease, transform .12s ease;
     }
 
     button:hover {
-      color: #f1f1f1;
-      background: #414141;
+      color: var(--pi-text-bright);
+      background: var(--pi-hover-overlay-strong);
     }
 
     button:focus-visible {
-      outline: 2px solid #78a8ed;
+      outline: 2px solid var(--pi-accent);
       outline-offset: 2px;
     }
 
@@ -273,9 +276,9 @@ export class TokenUsageDashboard extends LitElement {
 
     .tab.active,
     .range.active {
-      color: #f4f4f4;
-      background: linear-gradient(180deg, #535353, #454545);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .075), 0 1px 2px rgba(0, 0, 0, .18);
+      color: var(--pi-text-bright);
+      background: var(--pi-selection-bg);
+      box-shadow: inset 0 1px 0 var(--pi-inset-highlight), 0 1px 2px var(--pi-shadow-soft);
     }
 
     .metrics-grid {
@@ -290,10 +293,10 @@ export class TokenUsageDashboard extends LitElement {
       min-width: 0;
       height: 48px;
       padding: 6px 6px 5px;
-      border: 1px solid rgba(255, 255, 255, .025);
+      border: 1px solid var(--pi-border-muted);
       border-radius: 6px;
-      background: linear-gradient(180deg, #484848 0%, #3e3e3e 100%);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), inset 0 -1px 0 rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .16);
+      background: color-mix(in srgb, var(--pi-surface) 82%, var(--pi-bg) 18%);
+      box-shadow: inset 0 1px 0 var(--pi-inset-highlight), inset 0 -1px 0 var(--pi-shadow-soft), 0 1px 2px var(--pi-shadow-soft);
       overflow: hidden;
     }
 
@@ -301,7 +304,7 @@ export class TokenUsageDashboard extends LitElement {
     .model-label {
       display: block;
       min-width: 0;
-      color: #b9b9b9;
+      color: var(--pi-muted);
       font-size: 13px;
       font-weight: 760;
       letter-spacing: -.025em;
@@ -316,7 +319,7 @@ export class TokenUsageDashboard extends LitElement {
       display: block;
       min-width: 0;
       margin-top: 1px;
-      color: #f7f7f7;
+      color: var(--pi-text-bright);
       font-size: 17px;
       font-weight: 820;
       letter-spacing: -.035em;
@@ -328,7 +331,7 @@ export class TokenUsageDashboard extends LitElement {
 
     .heatmap {
       margin-top: 7px;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .heatmap-grid {
@@ -341,22 +344,54 @@ export class TokenUsageDashboard extends LitElement {
     }
 
     .heatmap-cell {
+      position: relative;
       width: 14px;
       height: 14px;
       border-radius: 3px;
-      background: linear-gradient(180deg, #424242, #363636);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035), inset 0 -1px 0 rgba(0, 0, 0, .18), 0 1px 1px rgba(0, 0, 0, .16);
+      background: color-mix(in srgb, var(--pi-text) 6%, var(--pi-surface));
+      box-shadow: inset 0 1px 0 var(--pi-inset-highlight), inset 0 -1px 0 var(--pi-shadow-soft), 0 1px 1px var(--pi-shadow-soft);
     }
 
-    .heatmap-cell.level-1 { background: linear-gradient(180deg, #58677c, #46556d); }
-    .heatmap-cell.level-2 { background: linear-gradient(180deg, #7193c4, #5d7ead); }
-    .heatmap-cell.level-3 { background: linear-gradient(180deg, #91b7eb, #779fda); }
-    .heatmap-cell.level-4 { background: linear-gradient(180deg, #609bf0, #447fd6); }
-    .heatmap-cell.level-5 { background: linear-gradient(180deg, #438eea, #2672d3); }
+    .heatmap-tooltip {
+      position: absolute;
+      z-index: 10;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      box-sizing: border-box;
+      max-width: max-content;
+      padding: 7px 10px;
+      border: 1px solid var(--pi-elevated-border);
+      border-radius: 11px;
+      color: var(--pi-text-bright);
+      background: var(--pi-elevated-bg);
+      box-shadow: 0 8px 20px var(--pi-shadow), inset 0 1px 0 var(--pi-inset-highlight);
+      font-size: 13px;
+      font-weight: 780;
+      line-height: 1.15;
+      letter-spacing: -.025em;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transform: translate(-50%, 4px);
+      transition: opacity .12s ease, transform .12s ease, visibility .12s ease;
+    }
+
+    .heatmap-cell:hover .heatmap-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, 0);
+    }
+
+    .heatmap-cell.level-1 { background: color-mix(in srgb, var(--pi-accent) 18%, var(--pi-surface)); }
+    .heatmap-cell.level-2 { background: color-mix(in srgb, var(--pi-accent) 34%, var(--pi-surface)); }
+    .heatmap-cell.level-3 { background: color-mix(in srgb, var(--pi-accent) 52%, var(--pi-surface)); }
+    .heatmap-cell.level-4 { background: color-mix(in srgb, var(--pi-accent) 72%, var(--pi-surface)); }
+    .heatmap-cell.level-5 { background: var(--pi-accent); }
 
     .usage-note {
       margin: 10px 0 0;
-      color: #b8b8b8;
+      color: var(--pi-muted);
       font-size: 13px;
       font-weight: 760;
       line-height: 1.25;
@@ -371,15 +406,16 @@ export class TokenUsageDashboard extends LitElement {
       min-height: 208px;
       box-sizing: border-box;
       padding: 12px;
+      border: 1px solid var(--pi-border-muted);
       border-radius: 6px;
-      background: linear-gradient(180deg, #484848 0%, #3e3e3e 100%);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), inset 0 -1px 0 rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .16);
+      background: color-mix(in srgb, var(--pi-surface) 82%, var(--pi-bg) 18%);
+      box-shadow: inset 0 1px 0 var(--pi-inset-highlight), inset 0 -1px 0 var(--pi-shadow-soft), 0 1px 2px var(--pi-shadow-soft);
     }
 
     .model-detail {
       display: block;
       margin-top: 10px;
-      color: #a9a9a9;
+      color: var(--pi-text-secondary);
       font-size: 13px;
       line-height: 1.35;
     }
@@ -390,7 +426,7 @@ export class TokenUsageDashboard extends LitElement {
     }
 
     .loading {
-      color: #b8b8b8;
+      color: var(--pi-muted);
       font-size: 15px;
       font-weight: 700;
     }
@@ -434,6 +470,15 @@ function heatmapLevel(total: number, max: number): number {
   if (fraction >= .32) return 3;
   if (fraction >= .14) return 2;
   return 1;
+}
+
+function heatmapTooltip(day: DailyTokenUsage): string {
+  return `${formatUsageDateLabel(day.date)} 使用了 ${formatNumber(day.total)} 个 Token`;
+}
+
+function formatUsageDateLabel(date: string): string {
+  const [month = 1, day = 1] = date.split("-").slice(1).map((part) => Number.parseInt(part, 10));
+  return `${String(month)}月${String(day)}日`;
 }
 
 function formatNumber(value: number): string {
