@@ -29,7 +29,7 @@ export class GitController {
           this.setState({ selectedDiffPath: diffPath });
           setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", diffPath, { replace: true });
         }
-        if (status.files.some((file) => file.path === diffPath)) await this.refreshDiff(diffPath);
+        if (status.isGitRepo) await this.refreshDiff(diffPath);
         else {
           this.setState({ selectedDiffPath: undefined, selectedDiff: undefined, selectedStagedDiff: undefined });
           setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", undefined, { replace: true });
