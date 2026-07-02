@@ -10,6 +10,7 @@ import type { PromptAttachmentDelivery } from "../../../shared/apiTypes";
 import { capturePromptAttachments, effectivePromptAttachmentDelivery, isInlinePromptAttachment, promptAttachmentsCanUseInlineDelivery, type CapturedAttachment } from "../promptAttachmentCapture";
 import { inputModeForDraft } from "../inputModes";
 import { machineSessionKey } from "../machineKeys";
+import { promptCompletionMenuPosition, type PromptCompletionMenuPosition } from "../promptCompletionLayout";
 import { detectPromptCompletionTrigger, fileCompletionInsertText, matchingSlashCommands, type PromptCompletionTrigger } from "../promptCompletions";
 import { clearDraft, loadDraft, saveDraft } from "../promptDraftStorage";
 import { WEB_SLASH_COMMANDS } from "../slashCommands";
@@ -56,7 +57,7 @@ export class PromptEditor extends LitElement {
   @state() private attachmentError: string | undefined = undefined;
   @state() private isHovered = false;
   @state() private showSteerPopup = false;
-  @state() private completionPos: { left: number; bottom: number } | undefined = undefined;
+  @state() private completionPos: PromptCompletionMenuPosition | undefined = undefined;
   private attachmentSeq = 0;
   private requestVersion = 0;
   private editor: EditorView | undefined;
@@ -199,7 +200,7 @@ export class PromptEditor extends LitElement {
 
   private get completionPosStyle(): string {
     if (!this.completionPos) return "";
-    return `left:${String(this.completionPos.left)}px;bottom:${String(this.completionPos.bottom)}px`;
+    return `left:${String(this.completionPos.left)}px;bottom:${String(this.completionPos.bottom)}px;width:${String(this.completionPos.width)}px`;
   }
 
   private actionTitle(state: ActionState): string {
@@ -431,11 +432,16 @@ export class PromptEditor extends LitElement {
       this.completionPos = undefined;
       return;
     }
-    // Position the menu above the cursor, aligned to the cursor's left edge,
-    // clamped inside the editor wrap.
-    const left = Math.max(8, Math.min(cursorRect.left - hostRect.left, hostRect.width - 160));
-    const bottom = hostRect.bottom - cursorRect.top + 4;
-    this.completionPos = { left, bottom };
+    // Position the menu above the cursor and keep its width explicit. The
+    // autocomplete host is absolutely positioned, so without a width the shadow
+    // menu can shrink to zero and appear as if completions never opened.
+    this.completionPos = promptCompletionMenuPosition({
+      cursorLeft: cursorRect.left,
+      cursorTop: cursorRect.top,
+      hostLeft: hostRect.left,
+      hostBottom: hostRect.bottom,
+      hostWidth: hostRect.width,
+    });
   }
 
   private async refreshCompletions() {
@@ -447,8 +453,8 @@ export class PromptEditor extends LitElement {
       this.completionPos = undefined;
       return;
     }
-    if (trigger.kind === "command" && this.sessionId !== undefined && this.sessionId !== "" && this.cwd !== undefined && this.cwd !== "") {
-      const runtimeCommands = await api.commands({ id: this.sessionId, cwd: this.cwd }, this.machineId).catch(emptySlashCommands);
+    if (trigger.kind === "command") {
+      const runtimeCommands = await this.loadRuntimeSlashCommands();
       if (version !== this.requestVersion) return;
       this.completions = matchingSlashCommands([...WEB_SLASH_COMMANDS, ...runtimeCommands], trigger.query)
         .map((command) => ({
@@ -459,28 +465,47 @@ export class PromptEditor extends LitElement {
           detail: command.source,
           ...(command.description === undefined ? {} : { description: command.description }),
         }));
-    } else if (trigger.kind === "file" && this.cwd !== undefined && this.cwd !== "") {
-      const files = await api.files(this.cwd, trigger.query, { scope: trigger.fileScope, machineId: this.machineId, projectId: this.projectId, workspaceId: this.workspaceId, workspaceScoped: this.workspaceScopedFileSuggestions }).catch(emptyFileSuggestions);
-      if (version !== this.requestVersion) return;
-      this.completions = files
-        .slice(0, 12)
-        .map((file) => {
-          const insertText = fileCompletionInsertText(file.path, trigger.quoted === true, file.path.endsWith("/") ? trigger.allPrefix : undefined);
-          return {
-            kind: "file",
-            replaceFrom: trigger.from,
-            replaceTo: trigger.to,
-            insertText,
-            detail: file.kind,
-            ...(file.path.endsWith("/") && insertText.endsWith("\"") ? { cursorOffset: insertText.length - 1 } : {}),
-          };
-        });
+      this.updateCompletionPosition();
+      return;
     }
+
+    if (!this.canLoadFileCompletions()) {
+      this.completions = [];
+      this.completionPos = undefined;
+      return;
+    }
+
+    const files = await api.files(this.cwd ?? "", trigger.query, { scope: trigger.fileScope, machineId: this.machineId, projectId: this.projectId, workspaceId: this.workspaceId, workspaceScoped: this.workspaceScopedFileSuggestions }).catch(emptyFileSuggestions);
+    if (version !== this.requestVersion) return;
+    this.completions = files
+      .slice(0, 12)
+      .map((file) => {
+        const insertText = fileCompletionInsertText(file.path, trigger.quoted === true, file.path.endsWith("/") ? trigger.allPrefix : undefined);
+        return {
+          kind: "file",
+          replaceFrom: trigger.from,
+          replaceTo: trigger.to,
+          insertText,
+          detail: file.kind,
+          ...(file.path.endsWith("/") && insertText.endsWith("\"") ? { cursorOffset: insertText.length - 1 } : {}),
+        };
+      });
     this.updateCompletionPosition();
   }
 
   private currentTrigger(): PromptCompletionTrigger | undefined {
     return detectPromptCompletionTrigger(this.draft, this.editor?.state.selection.main.head ?? this.draft.length);
+  }
+
+  private async loadRuntimeSlashCommands(): Promise<SlashCommand[]> {
+    if (this.sessionId === undefined || this.sessionId === "") return [];
+    const session = this.cwd !== undefined && this.cwd !== "" ? { id: this.sessionId, cwd: this.cwd } : this.sessionId;
+    return await api.commands(session, this.machineId).catch(emptySlashCommands);
+  }
+
+  private canLoadFileCompletions(): boolean {
+    if (this.cwd !== undefined && this.cwd !== "") return true;
+    return this.workspaceScopedFileSuggestions && this.projectId !== undefined && this.projectId !== "" && this.workspaceId !== undefined && this.workspaceId !== "";
   }
 
   private moveCompletion(delta: number): boolean {
