@@ -138,7 +138,7 @@ export const appStyles = css`
     .shell.workspace-view > workspace-panel { grid-column: 3; grid-row: 2; display: flex; border-left: 0; }
     .shell:not(.workspace-view) > workspace-panel { display: none; }
     .workspace-panel-edge { display: none; }
-    main.workspace-view chat-view, main.workspace-view prompt-editor, main.workspace-view status-bar,
+    main.workspace-view chat-view, main.workspace-view prompt-editor,
     main.workspace-view .empty { display: none; }
     main.workspace-view { overflow: hidden; }
   }
@@ -148,7 +148,7 @@ export const appStyles = css`
     main, .shell.workspace-view > workspace-panel { grid-column: 1; }
     .context-bar { display: flex; }
     .mobile-navigation-tab { display: block; }
-    main.navigation-view chat-view, main.navigation-view prompt-editor, main.navigation-view status-bar,
+    main.navigation-view chat-view, main.navigation-view prompt-editor,
     main.navigation-view .empty, main.navigation-view token-usage-dashboard { display: none; }
     main.navigation-view .mobile-navigation-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
     main.navigation-view .mobile-navigation-panel app-navigation-panel { flex: 1 1 auto; min-height: 0; }
@@ -158,11 +158,10 @@ export const appStyles = css`
     main.navigation-view .mobile-navigation-panel project-list[collapsed],
     main.navigation-view .mobile-navigation-panel workspace-list[collapsed],
     main.navigation-view .mobile-navigation-panel session-list[collapsed] { flex: 0 0 auto; min-height: auto; overflow: hidden; }
-    main.home-view chat-view, main.home-view prompt-editor, main.home-view status-bar { display: none; }
+    main.home-view chat-view, main.home-view prompt-editor { display: none; }
   }
-  status-bar { flex: 0 0 auto; }
   chat-view { flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  prompt-editor { flex: 0 0 auto; }
+  prompt-editor { flex: 0 0 auto; position: relative; }
   button { border: 1px solid var(--pi-border); border-radius: 8px; background: var(--pi-surface); color: var(--pi-text); padding: 7px 9px; cursor: pointer; }
   .empty { margin: auto; color: var(--pi-muted); }
   .error { padding: 10px 16px; border-bottom: 1px solid var(--pi-border); color: var(--pi-danger); }
@@ -919,15 +918,10 @@ export const formattedTextStyles = css`
 `;
 
 export const statusBarStyles = css`
-  :host { display: block; color: var(--pi-muted); font: 12px system-ui, sans-serif; }
-  .bar { display: flex; justify-content: flex-end; gap: 12px; align-items: center; min-width: 0; padding: 7px 12px; border-top: 1px solid var(--pi-hover-overlay); background: var(--pi-bg); white-space: nowrap; overflow: hidden; }
+  :host { position: absolute; top: 2px; right: 20px; display: block; pointer-events: none; z-index: 4; }
+  .bar { display: flex; justify-content: flex-end; gap: 10px; align-items: center; min-width: 0; padding: 3px 0; white-space: nowrap; overflow: hidden; color: var(--pi-muted); font: 11px system-ui, sans-serif; opacity: 0; transition: opacity .2s ease-in-out; }
+  .bar.visible { opacity: .4; }
   span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .activity { display: inline-flex; align-items: center; gap: 6px; color: var(--pi-muted); }
-  .activity.active { color: var(--pi-success); }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .45; flex: 0 0 auto; position: relative; }
-  .dot::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; background: currentColor; opacity: 0; filter: blur(3px); }
-  .activity.active .dot { animation: activity-breathe 2s ease-in-out infinite; opacity: 1; }
-  .activity.active .dot::after { animation: activity-glow 2s ease-in-out infinite; }
   .muted { color: var(--pi-dim); }
 `;
 
@@ -1019,61 +1013,167 @@ export const actionPaletteStyles = css`
 
 export const promptEditorStyles = css`
   /* ════════════════════════════════════════════════════════════════
-     Codex Glass Composer Input
+     Minimalist Single-Line Composer
      ════════════════════════════════════════════════════════════════ */
   :host { position: relative; z-index: 5; display: block; color: var(--pi-text); font: 14px system-ui, sans-serif; }
+  .composer-shell { position: relative; box-sizing: border-box; padding-top: 14px; }
   footer {
-    display: grid; grid-template-columns: minmax(0, 1fr);
-    gap: 8px; padding: 12px 16px;
+    position: relative;
+    padding: 10px 14px;
     border-top: 0;
+    transition: opacity .2s ease-in-out;
   }
+  footer[data-generating] { opacity: .65; }
   footer.shell-mode { background: var(--pi-success-bg); }
-  .editor-wrap { position: relative; min-width: 0; }
 
-  /* ── Actions row ── */
-  .actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: nowrap; white-space: nowrap; }
-  .action-buttons { display: flex; gap: 6px; align-items: center; }
-  .compact-status { display: flex; min-width: 0; align-items: center; gap: 6px; color: var(--pi-muted); font-size: 12px; flex: 1 1 0; }
-  .compact-status > button { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .select-model { max-width: min(42vw, 320px); }
-  .icon-button { flex: 0 0 auto; display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--pi-border-muted); border-radius: 10px; background: var(--pi-surface); transition: all .2s cubic-bezier(.4,0,.2,1); }
-  .icon-button:hover, .icon-button:focus { background: var(--pi-hover-overlay-strong); border-color: var(--pi-hover-overlay-strong); }
-  .icon-button .prompt-action-icon, .icon-button .prompt-thinking-gauge { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-  .icon-button .prompt-action-icon-filled { fill: currentColor; stroke: none; }
-  .send-button:not(:disabled) { color: var(--pi-accent, var(--pi-text)); }
-  .stop-button:not(:disabled) { color: var(--pi-danger); }
-  .select-thinking .prompt-thinking-gauge .gauge-bar { fill: currentColor; stroke: none; opacity: .28; }
-  .select-thinking .prompt-thinking-gauge .gauge-bar-active { opacity: 1; }
-  .editor-attach { position: absolute; right: 8px; bottom: 8px; z-index: 2; width: 30px; height: 30px; }
-  .editor-attach .prompt-action-icon { width: 16px; height: 16px; }
-
-  /* ── Glass editor area ── */
-  textarea, .markdown-editor .cm-editor {
-    box-sizing: border-box; width: 100%;
-    min-height: 54px; max-height: 220px; resize: none; overflow: hidden;
-    border-radius: 24px;
+  /* ── Single-line composer row ── */
+  .composer-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 8px;
     border: 1px solid var(--pi-border-muted);
+    border-radius: 24px;
     background: var(--pi-surface);
-    color: var(--pi-text);
-    font: 16px/1.4 system-ui, sans-serif;
-    box-shadow: 0 12px 40px -4px var(--pi-shadow-strong);
-    transition: border-color .2s cubic-bezier(.4,0,.2,1), box-shadow .2s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 10px 34px -6px var(--pi-shadow-strong);
+    transition: border-color .2s ease-in-out, box-shadow .2s ease-in-out;
   }
-  textarea:focus, .markdown-editor .cm-focused .cm-editor {
+  footer:focus-within .composer-line, footer:hover .composer-line {
     border-color: var(--pi-hover-overlay-strong);
-    box-shadow: 0 12px 40px -4px var(--pi-shadow-strong), 0 0 0 2px color-mix(in srgb, var(--pi-running) 12%, transparent);
+    box-shadow: 0 10px 34px -6px var(--pi-shadow-strong), 0 0 0 1.5px color-mix(in srgb, var(--pi-running) 10%, transparent);
   }
-  textarea { overflow-y: auto; padding: 12px 16px; background: transparent; outline: none; }
-  .markdown-editor .cm-scroller { max-height: 220px; overflow-y: auto; font-family: system-ui, sans-serif; line-height: 1.4; border-radius: 24px; }
-  .markdown-editor .cm-content { min-height: 38px; padding: 12px 44px 12px 16px; caret-color: var(--pi-text); text-align: start; unicode-bidi: plaintext; }
+  footer.shell-mode .composer-line { border-color: color-mix(in srgb, var(--pi-success) 12%, transparent); }
+
+  /* ── Left cluster: model selector ── */
+  .left-cluster { flex: 0 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .model-selector {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: min(34vw, 220px);
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--pi-muted);
+    font: 12px system-ui, sans-serif;
+    cursor: pointer;
+    transition: all .2s ease-in-out;
+  }
+  .model-selector:hover, .model-selector:focus-visible { background: color-mix(in srgb, var(--pi-text) 6%, transparent); color: var(--pi-text-secondary); }
+  .model-globe { font-size: 11px; line-height: 1; filter: grayscale(.3); }
+  .model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .model-chevron { opacity: 0; transform: translateY(1px); transition: opacity .15s ease; }
+  .model-selector:hover .model-chevron, .model-selector:focus-visible .model-chevron { opacity: 1; }
+  .thinking-selector {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--pi-muted);
+    cursor: pointer;
+    transition: all .2s ease-in-out;
+  }
+  .thinking-selector:hover, .thinking-selector:focus-visible { background: color-mix(in srgb, var(--pi-text) 6%, transparent); color: var(--pi-text-secondary); }
+  .thinking-selector .prompt-thinking-gauge { width: 14px; height: 14px; }
+  .thinking-selector .prompt-thinking-gauge .gauge-bar { fill: currentColor; stroke: none; opacity: .28; }
+  .thinking-selector .prompt-thinking-gauge .gauge-bar-active { opacity: 1; }
+
+  /* ── Center: flexible editor ── */
+  .editor-wrap { flex: 1 1 auto; position: relative; min-width: 0; }
+  .markdown-editor .cm-editor {
+    box-sizing: border-box; width: 100%;
+    min-height: 36px; max-height: 220px; resize: none; overflow: hidden;
+    border-radius: 16px;
+    border: 0;
+    background: transparent;
+    color: var(--pi-text);
+    font: 15px/1.45 system-ui, sans-serif;
+    box-shadow: none;
+    transition: background .2s ease-in-out;
+  }
+  .markdown-editor .cm-focused .cm-editor { outline: none; }
+  .markdown-editor .cm-scroller { max-height: 220px; overflow-y: auto; font-family: system-ui, sans-serif; line-height: 1.45; border-radius: 16px; }
+  .markdown-editor .cm-content { min-height: 22px; padding: 7px 6px; caret-color: var(--pi-text); text-align: start; unicode-bidi: plaintext; }
   .markdown-editor .cm-line { padding: 0; unicode-bidi: plaintext; }
   .markdown-editor .cm-placeholder { color: var(--pi-dim); }
-  .markdown-editor .cm-focused { outline: none; }
-  .shell-mode textarea, .shell-mode .markdown-editor .cm-editor { border-color: color-mix(in srgb, var(--pi-success) 3%, transparent); box-shadow: 0 12px 40px -4px var(--pi-shadow-strong), 0 0 0 2px color-mix(in srgb, var(--pi-success) 12%, transparent); }
-  .mode-hint { position: absolute; right: 46px; bottom: 8px; max-width: calc(100% - 54px); border: 1px solid color-mix(in srgb, var(--pi-success) 25%, transparent); border-radius: 999px; background: var(--pi-success-bg); color: var(--pi-success); padding: 2px 8px; font-size: 12px; pointer-events: none; }
+  .markdown-editor-disabled .cm-editor { opacity: .45; }
 
-  /* ── Attachments ── */
-  .attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  /* ── Right cluster: attach + action ── */
+  .right-cluster { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+  .right-cluster button {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pi-muted);
+    cursor: pointer;
+    transition: all .2s ease-in-out;
+  }
+  .right-cluster button:hover:not(:disabled), .right-cluster button:focus-visible:not(:disabled) { background: color-mix(in srgb, var(--pi-text) 6%, transparent); color: var(--pi-text-secondary); }
+  .right-cluster button:disabled { opacity: .35; cursor: not-allowed; }
+  .right-cluster .prompt-action-icon, .right-cluster .prompt-thinking-gauge { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .right-cluster .prompt-action-icon-filled { fill: currentColor; stroke: none; }
+  .attach-button { opacity: .65; }
+  .attach-button:hover:not(:disabled) { opacity: 1; }
+
+  /* ── Quantum action button ── */
+  .action-button { position: relative; overflow: hidden; }
+  .action-button.action-active { color: var(--pi-accent); }
+  .action-button.action-generating { color: var(--pi-danger); }
+  .action-icon { display: inline-grid; place-items: center; transition: opacity .2s ease-in-out, transform .2s ease-in-out; }
+  .action-icon.hidden { opacity: 0; transform: scale(.7); pointer-events: none; }
+  .action-icon-stop { position: absolute; inset: 0; }
+
+  /* ── Inline autocomplete at cursor ── */
+  autocomplete-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 10; }
+  autocomplete-menu.cursor-positioned {
+    left: auto;
+    right: auto;
+    bottom: auto;
+  }
+
+  /* ── Steer long-press popup ── */
+  .steer-popup {
+    position: absolute;
+    right: 10px;
+    bottom: calc(100% + 8px);
+    z-index: 11;
+    padding: 4px;
+    border: 1px solid var(--pi-border-muted);
+    border-radius: 10px;
+    background: var(--pi-surface);
+    box-shadow: 0 10px 30px var(--pi-shadow);
+  }
+  .steer-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--pi-text);
+    font: 13px system-ui, sans-serif;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .steer-option:hover, .steer-option:focus-visible { background: color-mix(in srgb, var(--pi-text) 8%, transparent); }
+  .steer-option kbd { padding: 1px 5px; border: 1px solid var(--pi-border-muted); border-radius: 5px; background: var(--pi-bg); color: var(--pi-muted); font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  /* ── Mode hints / Attachments ── */
+  .mode-hint { position: absolute; right: 58px; bottom: 4px; max-width: calc(100% - 80px); border: 1px solid color-mix(in srgb, var(--pi-success) 25%, transparent); border-radius: 999px; background: var(--pi-success-bg); color: var(--pi-success); padding: 2px 8px; font-size: 11px; pointer-events: none; }
+  .attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; padding: 0 4px; }
   .attachment-chip { position: relative; width: 56px; height: 56px; border: 1px solid var(--pi-border-muted); border-radius: 8px; overflow: hidden; background: var(--pi-solid-bg); }
   .attachment-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .attachment-chip-file { display: grid; place-items: center; }
@@ -1083,24 +1183,15 @@ export const promptEditorStyles = css`
   .attachment-delivery select { border: 1px solid var(--pi-border-muted); border-radius: 8px; background: var(--pi-surface); color: var(--pi-text); padding: 5px 7px; font: 12px system-ui, sans-serif; }
   .attachment-error { flex-basis: 100%; color: var(--pi-danger); font-size: 12px; }
 
-  /* ── Buttons ── */
-  button { border: 1px solid var(--pi-border-muted); border-radius: 10px; background: var(--pi-surface); color: var(--pi-text); padding: 7px 9px; cursor: pointer; transition: all .2s cubic-bezier(.4,0,.2,1); }
-  button:hover, button:focus { background: var(--pi-hover-overlay-strong); border-color: var(--pi-hover-overlay-strong); }
-  button:disabled, textarea:disabled, .markdown-editor-disabled .cm-editor { opacity: .5; cursor: not-allowed; }
-
   @media (max-width: 640px) {
-    footer { gap: 8px; padding: 8px 12px; }
-    .actions { gap: 6px; }
-    .compact-status { flex: 1 1 220px; gap: 4px; }
-    .select-model { max-width: min(58vw, 260px); }
-    button { padding: 6px 8px; }
-    textarea, .markdown-editor .cm-editor { border-radius: 20px; }
+    footer { padding: 8px 10px; }
+    .composer-line { gap: 6px; padding: 5px 6px; border-radius: 20px; }
+    .model-selector { max-width: min(40vw, 170px); font-size: 11px; }
+    .markdown-editor .cm-content { padding: 7px 4px; font-size: 16px; }
   }
   @media (max-width: 430px) {
-    .compact-status { flex-basis: 170px; font-size: 11px; }
-    .select-model { max-width: 48vw; }
-    button { padding: 5px 7px; }
-    .icon-button { width: 34px; height: 34px; }
-    textarea, .markdown-editor .cm-editor { border-radius: 18px; }
+    .model-selector { max-width: 34vw; }
+    .thinking-selector { display: none; }
+    .right-cluster button { width: 32px; height: 32px; }
   }
 `;

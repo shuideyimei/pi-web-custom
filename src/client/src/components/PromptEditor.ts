@@ -16,11 +16,16 @@ import { WEB_SLASH_COMMANDS } from "../slashCommands";
 import { loadAttachmentDelivery, saveAttachmentDelivery } from "../attachmentPreferences";
 import { createMobilePromptEnterMedia, readPromptEnterPreference, shouldSendPromptOnEnterShortcut, shouldUsePromptEnterShiftShortcut } from "../promptEnterBehavior";
 import { promptEditorStyles, type CompletionItem } from "./shared";
-import { renderAttachIcon, renderSendIcon, renderQueueIcon, renderSteerIcon, renderStopIcon, renderThinkingGauge } from "./promptEditorIcons";
+import { renderAttachIcon, renderSendIcon, renderStopIcon, renderThinkingGauge } from "./promptEditorIcons";
 import { thinkingGauge, thinkingLevelLabel } from "../../../shared/thinkingLevels";
 import "./AutocompleteMenu";
+import "./StatusBar";
 
 type PendingAttachment = CapturedAttachment & { id: string };
+type ActionState = "idle" | "active" | "generating";
+
+const STEER_LONG_PRESS_MS = 500;
+const TOKEN_PULSE_THRESHOLD = 1000;
 
 @customElement("prompt-editor")
 export class PromptEditor extends LitElement {
@@ -49,6 +54,9 @@ export class PromptEditor extends LitElement {
   @state() private attachments: PendingAttachment[] = [];
   @state() private attachmentDelivery: PromptAttachmentDelivery = loadAttachmentDelivery();
   @state() private attachmentError: string | undefined = undefined;
+  @state() private isHovered = false;
+  @state() private showSteerPopup = false;
+  @state() private completionPos: { left: number; bottom: number } | undefined = undefined;
   private attachmentSeq = 0;
   private requestVersion = 0;
   private editor: EditorView | undefined;
@@ -56,6 +64,10 @@ export class PromptEditor extends LitElement {
   private readonly readOnlyCompartment = new Compartment();
   private readonly mobilePromptEnterMedia = createMobilePromptEnterMedia();
   private explicitShiftKeyActive = false;
+  private longPressTimer: number | undefined = undefined;
+  private longPressFired = false;
+  private previousContextTokens?: number | null;
+  private tokenPulseTimer: number | undefined = undefined;
 
   protected override willUpdate(changed: PropertyValues<this>) {
     if (!changed.has("sessionId") && !changed.has("machineId")) return;
@@ -67,6 +79,7 @@ export class PromptEditor extends LitElement {
     this.draft = currentKey !== undefined ? loadDraft(currentKey) : "";
     this.completions = [];
     this.selectedIndex = 0;
+    this.completionPos = undefined;
   }
 
   override firstUpdated(): void {
@@ -76,9 +89,13 @@ export class PromptEditor extends LitElement {
   protected override updated(changed: PropertyValues) {
     if (changed.has("disabled")) this.updateEditorDisabledState();
     if (changed.has("draft") || changed.has("sessionId") || changed.has("machineId")) this.syncEditorDoc();
+    if (changed.has("status")) this.checkTokenPulse();
+    if (changed.has("completions")) this.updateCompletionPosition();
   }
 
   override disconnectedCallback(): void {
+    window.clearTimeout(this.longPressTimer);
+    window.clearTimeout(this.tokenPulseTimer);
     this.editor?.destroy();
     this.editor = undefined;
     super.disconnectedCallback();
@@ -87,30 +104,69 @@ export class PromptEditor extends LitElement {
   override render() {
     const inputMode = inputModeForDraft(this.draft);
     const shellMode = inputMode.kind === "shell";
-    const queuesInput = this.canSteer || this.isCompacting;
-    const busy = this.disabled || this.sending;
-    const sendTitle = queuesInput ? "Queue until the current activity finishes" : "Send message";
-    const sendAriaLabel = queuesInput ? "Queue message" : "Send message";
+    const actionState = this.actionState;
+    const busy = this.disabled || this.sending || actionState === "generating";
     return html`
-      <footer class=${shellMode ? "shell-mode" : ""} @paste=${(event: ClipboardEvent) => { void this.handlePaste(event); }} @dragover=${(event: DragEvent) => { this.handleDragOver(event); }} @drop=${(event: DragEvent) => { void this.handleDrop(event); }}>
-        <div class="editor-wrap">
-          <div class=${`markdown-editor${this.disabled ? " markdown-editor-disabled" : ""}`} aria-label="Message pi" aria-disabled=${this.disabled ? "true" : "false"}></div>
-          <input class="attachment-input" type="file" multiple hidden @change=${(event: Event) => { void this.handleFileInput(event); }} />
-          <button class="editor-attach icon-button" ?disabled=${busy} title="Attach files" aria-label="Attach files" @click=${() => { this.attachmentInput?.click(); }}>${renderAttachIcon()}</button>
-          ${shellMode ? html`<div class="mode-hint">Shell command${inputMode.excludeFromContext ? " · excluded from context" : ""}</div>` : null}
-          ${this.isCompacting && !shellMode ? html`<div class="mode-hint">Compacting history · message will be queued</div>` : null}
-          ${this.renderAttachments()}
-          <autocomplete-menu .items=${this.completions} .selectedIndex=${this.selectedIndex} .onPick=${(item: CompletionItem) => { this.pick(item); }}></autocomplete-menu>
-        </div>
-        <div class="actions">
-          ${this.renderCompactStatus()}
-          <div class="action-buttons">
-            <button class="icon-button send-button" ?disabled=${busy} title=${sendTitle} aria-label=${sendAriaLabel} @click=${() => { this.send(this.primaryStreamingBehavior()); }}>${queuesInput ? renderQueueIcon() : renderSendIcon()}</button>
-            ${this.canSteer && !this.isCompacting ? html`<button class="icon-button steer-button" ?disabled=${busy} title="Steer the current response before the next model call" aria-label="Steer current response" @click=${() => { this.send("steer"); }}>${renderSteerIcon()}</button>` : null}
-            <button class="icon-button stop-button" ?disabled=${this.disabled || !this.canStop} title=${this.canStop ? "Stop current work and clear queued messages" : "Nothing running"} aria-label="Stop current work" @click=${() => this.onStop?.()}>${renderStopIcon()}</button>
+      <div class="composer-shell">
+        <footer
+          class=${shellMode ? "shell-mode" : ""}
+          ?data-generating=${actionState === "generating"}
+          @mouseenter=${() => { this.isHovered = true; }}
+          @mouseleave=${() => { this.isHovered = false; this.hideSteerPopup(); }}
+          @paste=${(event: ClipboardEvent) => { void this.handlePaste(event); }}
+          @dragover=${(event: DragEvent) => { this.handleDragOver(event); }}
+          @drop=${(event: DragEvent) => { void this.handleDrop(event); }}
+        >
+        <div class="composer-line">
+          <div class="left-cluster">
+            ${this.renderModelSelector()}
+            ${this.renderThinkingSelector()}
+          </div>
+          <div class="editor-wrap">
+            <div
+              class=${`markdown-editor${this.disabled || actionState === "generating" ? " markdown-editor-disabled" : ""}`}
+              aria-label="Message pi"
+              aria-disabled=${this.disabled || actionState === "generating" ? "true" : "false"}
+            ></div>
+            <autocomplete-menu
+              class=${this.completionPos ? "cursor-positioned" : ""}
+              .items=${this.completions}
+              .selectedIndex=${this.selectedIndex}
+              .onPick=${(item: CompletionItem) => { this.pick(item); }}
+              style=${this.completionPosStyle}
+            ></autocomplete-menu>
+          </div>
+          <div class="right-cluster">
+            <input class="attachment-input" type="file" multiple hidden @change=${(event: Event) => { void this.handleFileInput(event); }} />
+            <button
+              class="attach-button"
+              ?disabled=${busy}
+              title="Attach files"
+              aria-label="Attach files"
+              @click=${() => { this.attachmentInput?.click(); }}
+            >${renderAttachIcon()}</button>
+            <button
+              class=${`action-button action-${actionState}`}
+              ?disabled=${this.disabled}
+              title=${this.actionTitle(actionState)}
+              aria-label=${this.actionAriaLabel(actionState)}
+              @pointerdown=${(event: PointerEvent) => { this.onActionPointerDown(event); }}
+              @pointerup=${(event: PointerEvent) => { this.onActionPointerUp(event); }}
+              @pointerleave=${() => { this.cancelLongPress(); }}
+              @pointercancel=${() => { this.cancelLongPress(); }}
+            >
+              <span class=${`action-icon action-icon-send ${actionState === "generating" ? "hidden" : ""}`}>${renderSendIcon()}</span>
+              <span class=${`action-icon action-icon-stop ${actionState === "generating" ? "" : "hidden"}`}>${renderStopIcon()}</span>
+            </button>
           </div>
         </div>
-      </footer>
+        ${shellMode ? html`<div class="mode-hint">Shell command${inputMode.excludeFromContext ? " · excluded from context" : ""}</div>` : null}
+        ${this.isCompacting && !shellMode ? html`<div class="mode-hint">Compacting history · message will be queued</div>` : null}
+        ${this.renderAttachments()}
+        ${this.renderSteerPopup()}
+        </footer>
+        <status-bar .status=${this.status} .isComposerHovered=${this.isHovered} .pulseVisible=${this.pulseVisible}></status-bar>
+      </div>
     `;
   }
 
@@ -123,16 +179,66 @@ export class PromptEditor extends LitElement {
     return this.editor;
   }
 
-  private renderCompactStatus() {
+  private get hasInput(): boolean {
+    return this.draft.trim().length > 0 || this.attachments.length > 0;
+  }
+
+  private get isGenerating(): boolean {
+    return this.canStop && !this.hasInput;
+  }
+
+  private get actionState(): ActionState {
+    if (this.isGenerating) return "generating";
+    if (this.hasInput) return "active";
+    return "idle";
+  }
+
+  private get pulseVisible(): boolean {
+    return this.tokenPulseTimer !== undefined;
+  }
+
+  private get completionPosStyle(): string {
+    if (!this.completionPos) return "";
+    return `left:${String(this.completionPos.left)}px;bottom:${String(this.completionPos.bottom)}px`;
+  }
+
+  private actionTitle(state: ActionState): string {
+    if (state === "generating") return "Stop current work";
+    if (this.canSteer || this.isCompacting) return "Queue until the current activity finishes";
+    return "Send message";
+  }
+
+  private actionAriaLabel(state: ActionState): string {
+    if (state === "generating") return "Stop current work";
+    if (this.canSteer || this.isCompacting) return "Queue message";
+    return "Send message";
+  }
+
+  private renderModelSelector() {
     const status = this.status;
     if (status === undefined) return null;
     const model = status.model?.id ?? "no model";
     const provider = status.model?.provider !== undefined && status.model.provider !== "" ? `${status.model.provider}/` : "";
     return html`
-      <div class="compact-status" aria-label="Session status">
-        <button class="select-model" title="Select model" @click=${() => this.onSelectModel?.()}>${provider}${model}</button>
-        <button class="select-thinking icon-button" title=${`Thinking level: ${thinkingLevelLabel(status.thinkingLevel)}`} aria-label=${`Thinking level: ${thinkingLevelLabel(status.thinkingLevel)}`} @click=${() => this.onSelectThinking?.()}>${renderThinkingGauge(thinkingGauge(status.thinkingLevel, this.availableThinkingLevels))}</button>
-      </div>
+      <button class="model-selector" title="Select model" aria-label="Select model" @click=${() => this.onSelectModel?.()}>
+        <span class="model-globe" aria-hidden="true">🌐</span>
+        <span class="model-name">${provider}${model}</span>
+        <span class="model-chevron" aria-hidden="true">▾</span>
+      </button>
+    `;
+  }
+
+  private renderThinkingSelector() {
+    const status = this.status;
+    if (status === undefined || this.availableThinkingLevels.length === 0) return null;
+    const label = thinkingLevelLabel(status.thinkingLevel);
+    return html`
+      <button
+        class="thinking-selector"
+        title=${`Thinking level: ${label}`}
+        aria-label=${`Thinking level: ${label}`}
+        @click=${() => this.onSelectThinking?.()}
+      >${renderThinkingGauge(thinkingGauge(status.thinkingLevel, this.availableThinkingLevels))}</button>
     `;
   }
 
@@ -168,6 +274,18 @@ export class PromptEditor extends LitElement {
     return html`
       <div class="attachment-file-preview" aria-hidden="true">${fileExtensionLabel(attachment.name)}</div>
       <span class="attachment-file-name">${attachment.name}</span>
+    `;
+  }
+
+  private renderSteerPopup() {
+    if (!this.showSteerPopup || !this.canSteer || this.isCompacting) return null;
+    return html`
+      <div class="steer-popup" role="menu" aria-label="Steer options">
+        <button class="steer-option" role="menuitem" @click=${() => { this.hideSteerPopup(); this.send("steer"); }}>
+          <span>Steer current response</span>
+          <kbd>⌥↵</kbd>
+        </button>
+      </div>
     `;
   }
 
@@ -247,11 +365,14 @@ export class PromptEditor extends LitElement {
             keyup: (event) => this.handleEditorKeyUp(event),
             blur: () => this.resetEditorModifierState(),
           }),
-          placeholder("Message pi... Use / for commands, @ for tracked files, @ space for all files"),
+          placeholder("Message... (Type / for commands, @ for files)"),
           this.editableCompartment.of(EditorView.editable.of(!this.disabled)),
           this.readOnlyCompartment.of(EditorState.readOnly.of(this.disabled)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) this.updateDraft(update.state.doc.toString());
+            if ((update.selectionSet || update.viewportChanged || update.docChanged) && this.completions.length > 0) {
+              this.updateCompletionPosition();
+            }
           }),
           keymap.of([
             { any: (view, event) => this.handleEditorKeyDown(event, view) },
@@ -296,12 +417,34 @@ export class PromptEditor extends LitElement {
     void this.refreshCompletions();
   }
 
+  private updateCompletionPosition() {
+    const editor = this.editor;
+    const host = this.editorHost;
+    if (!editor || !host || this.completions.length === 0) {
+      this.completionPos = undefined;
+      return;
+    }
+    const head = editor.state.selection.main.head;
+    const cursorRect = editor.coordsAtPos(head, -1);
+    const hostRect = host.getBoundingClientRect();
+    if (cursorRect === null) {
+      this.completionPos = undefined;
+      return;
+    }
+    // Position the menu above the cursor, aligned to the cursor's left edge,
+    // clamped inside the editor wrap.
+    const left = Math.max(8, Math.min(cursorRect.left - hostRect.left, hostRect.width - 160));
+    const bottom = hostRect.bottom - cursorRect.top + 4;
+    this.completionPos = { left, bottom };
+  }
+
   private async refreshCompletions() {
     const trigger = this.currentTrigger();
     const version = ++this.requestVersion;
     this.selectedIndex = 0;
     if (trigger === undefined) {
       this.completions = [];
+      this.completionPos = undefined;
       return;
     }
     if (trigger.kind === "command" && this.sessionId !== undefined && this.sessionId !== "" && this.cwd !== undefined && this.cwd !== "") {
@@ -333,6 +476,7 @@ export class PromptEditor extends LitElement {
           };
         });
     }
+    this.updateCompletionPosition();
   }
 
   private currentTrigger(): PromptCompletionTrigger | undefined {
@@ -348,6 +492,7 @@ export class PromptEditor extends LitElement {
   private closeCompletions(): boolean {
     if (!this.completions.length) return false;
     this.completions = [];
+    this.completionPos = undefined;
     return true;
   }
 
@@ -356,6 +501,21 @@ export class PromptEditor extends LitElement {
       this.explicitShiftKeyActive = true;
       return false;
     }
+
+    // Cmd/Ctrl+Enter always sends.
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      this.send(this.primaryStreamingBehavior());
+      return true;
+    }
+
+    // Alt/Option+Enter steers when available, otherwise sends.
+    if (event.key === "Enter" && event.altKey) {
+      event.preventDefault();
+      this.send(this.canSteer && !this.isCompacting ? "steer" : this.primaryStreamingBehavior());
+      return true;
+    }
+
     if (event.key !== "Enter") {
       this.explicitShiftKeyActive = false;
       return false;
@@ -416,6 +576,7 @@ export class PromptEditor extends LitElement {
       scrollIntoView: true,
     });
     this.completions = [];
+    this.completionPos = undefined;
   }
 
   private send(streamingBehavior?: "steer" | "followUp") {
@@ -428,9 +589,6 @@ export class PromptEditor extends LitElement {
     const delivery = this.effectiveAttachmentDelivery();
     this.resetComposer();
     this.refocusComposer();
-    // Sending is owned by the controller (it drives the chat activity dock and,
-    // for folder mode, orchestrates the upload + reference rewrite), so this is
-    // fire-and-forget here.
     void this.onSend?.(text, behavior, attachments, attachments === undefined ? undefined : delivery);
   }
 
@@ -444,6 +602,7 @@ export class PromptEditor extends LitElement {
     const key = draftStorageKey(this.machineId, this.sessionId);
     if (key !== undefined) clearDraft(key);
     this.completions = [];
+    this.completionPos = undefined;
     this.attachments = [];
     this.attachmentError = undefined;
   }
@@ -453,6 +612,63 @@ export class PromptEditor extends LitElement {
       this.syncEditorDoc();
       this.focusInput();
     });
+  }
+
+  private onActionPointerDown(event: PointerEvent) {
+    if (this.actionState === "generating") return;
+    if (!(event.currentTarget instanceof HTMLElement)) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    this.longPressFired = false;
+    window.clearTimeout(this.longPressTimer);
+    this.longPressTimer = window.setTimeout(() => {
+      this.longPressFired = true;
+      if (this.canSteer && !this.isCompacting) {
+        this.showSteerPopup = true;
+      }
+    }, STEER_LONG_PRESS_MS);
+  }
+
+  private onActionPointerUp(event: PointerEvent) {
+    window.clearTimeout(this.longPressTimer);
+    if (!(event.currentTarget instanceof HTMLElement)) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (this.actionState === "generating") {
+      this.onStop?.();
+      return;
+    }
+    if (this.longPressFired) {
+      // Long press was handled by the popup; clicking the popup item sends steer.
+      return;
+    }
+    this.send(this.primaryStreamingBehavior());
+  }
+
+  private cancelLongPress() {
+    window.clearTimeout(this.longPressTimer);
+    this.longPressFired = false;
+  }
+
+  private hideSteerPopup() {
+    this.showSteerPopup = false;
+  }
+
+  private checkTokenPulse() {
+    const current = this.status?.contextUsage?.tokens ?? null;
+    if (current === null) {
+      this.previousContextTokens = current;
+      return;
+    }
+    const previous = this.previousContextTokens;
+    if (previous !== undefined && previous !== null && Math.abs(current - previous) > TOKEN_PULSE_THRESHOLD) {
+      window.clearTimeout(this.tokenPulseTimer);
+      this.tokenPulseTimer = window.setTimeout(() => {
+        this.tokenPulseTimer = undefined;
+        this.requestUpdate();
+      }, 3000);
+      // Ensure the host re-renders immediately so the status bar pulses.
+      this.requestUpdate();
+    }
+    this.previousContextTokens = current;
   }
 
   static override styles = promptEditorStyles;

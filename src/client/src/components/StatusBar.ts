@@ -7,6 +7,8 @@ import { statusBarStyles } from "./shared";
 @customElement("status-bar")
 export class StatusBar extends LitElement {
   @property({ attribute: false }) status?: SessionStatus;
+  @property({ type: Boolean }) isComposerHovered = false;
+  @property({ type: Boolean }) pulseVisible = false;
 
   override render() {
     const status = this.status;
@@ -19,7 +21,7 @@ export class StatusBar extends LitElement {
       : "context unknown";
     const tokens = status.tokens;
     return html`
-      <div class="bar">
+      <div class=${`bar ${this.isComposerHovered || this.pulseVisible ? "visible" : ""}`}>
         <span>↑${formatTokenCount(tokens.input)}</span>
         <span>↓${formatTokenCount(tokens.output)}</span>
         <span class="context">${contextText}</span>
