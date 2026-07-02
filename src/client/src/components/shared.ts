@@ -74,7 +74,7 @@ export const appStyles = css`
   @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
     :host { --pi-app-safe-area-bottom: env(safe-area-inset-bottom); }
   }
-  .shell { --navigation-panel-size: 340px; --workspace-panel-size: minmax(360px, 42vw); --navigation-panel-width: var(--navigation-panel-size); --workspace-panel-width: var(--workspace-panel-size); position: relative; z-index: 1; display: grid; grid-template-columns: var(--navigation-panel-width) 1px minmax(320px, 1fr) 1px var(--workspace-panel-width); grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
+  .shell { --navigation-panel-size: 300px; --workspace-panel-size: minmax(360px, 42vw); --navigation-panel-width: var(--navigation-panel-size); --workspace-panel-width: var(--workspace-panel-size); position: relative; z-index: 1; display: grid; grid-template-columns: var(--navigation-panel-width) 1px minmax(320px, 1fr) 1px var(--workspace-panel-width); grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
   aside { grid-column: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--pi-panel-bg); backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05); -webkit-backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05); border-right: 1px solid var(--pi-panel-border); box-shadow: inset 1px 0 0 0 var(--pi-inset-highlight); }
   aside app-navigation-panel { flex: 1 1 auto; min-height: 0; background: transparent; }
   header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; border-bottom: 1px solid var(--pi-border); }

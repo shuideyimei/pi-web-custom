@@ -235,7 +235,7 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
       >
         <div class="action-main ${selectionActive ? "selecting" : ""}" @click=${(event: MouseEvent) => { this.handleSessionMainClick(session, scope, event); }}>
           ${showsCheckbox ? html`<input class="session-checkbox" type="checkbox" aria-label=${`Select ${sessionLabel(session)}`} .checked=${bulkSelected} @click=${(event: MouseEvent) => { event.stopPropagation(); }} @change=${() => { this.toggleSelected(session.id); }}>` : null}
-          <span class="action-name" dir="auto">${row.depth > 0 ? html`<span class="tree-marker">↳</span>` : null}${sessionLabel(session)}${row.depth > 2 ? html` <span class="badge">depth ${row.depth}</span>` : null}${row.hasMissingParent ? html` <span class="badge">parent unavailable</span>` : null}</span><small>${this.renderSessionMetaPrefix(session)}${String(session.messageCount)} messages</small>
+          <span class="action-name" dir="auto">${row.depth > 0 ? html`<span class="tree-marker">↳</span>` : null}${sessionLabel(session)}${row.depth > 2 ? html` <span class="badge">depth ${row.depth}</span>` : null}${row.hasMissingParent ? html` <span class="badge">parent unavailable</span>` : null}</span>
           ${this.renderActivity(session)}
         </div>
         <div class="action-menu">
@@ -435,12 +435,6 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
 
   private scrollSelectedIntoView(): void {
     this.renderRoot.querySelector<HTMLElement>(".action-row.selected")?.scrollIntoView({ block: "nearest" });
-  }
-
-  private renderSessionMetaPrefix(session: SessionInfo) {
-    if (isCachedNewSessionInfo(session)) return "new · ";
-    if (session.archived === true) return "read-only · ";
-    return "";
   }
 
   private renderActivity(session: SessionInfo) {
