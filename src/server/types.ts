@@ -15,4 +15,7 @@ export type {
   SessionActivity as ClientSessionActivity,
   SessionUiEvent,
   GlobalSessionEvent,
+  TokenUsageSummary,
+  TokenUsageSummaryResponse,
+  DailyTokenUsage,
 } from "../shared/apiTypes.js";

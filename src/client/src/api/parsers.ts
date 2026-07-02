@@ -1,4 +1,4 @@
-import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, DeleteWorkspaceFileResponse, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitDiffResponse, GitFileState, GitStatusFile, GitStatusResponse, Machine, MachineHealth, MachineKind, MachineRuntime, MachineStatus, MessagePage, ModelSelectionResponse, MoveWorkspaceFileResponse, OAuthFlowState, PiWebCapability, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebPluginConfigMap, PiWebPluginInfo, PiWebPluginsResponse, PiWebPluginScope, PiWebReleaseStatus, PiWebRuntimeComponent, PiWebRuntimeResponse, PiWebServiceComponent, PiWebShortcutConfig, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SavedPromptAttachment, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevelsResponse, WriteWorkspaceFileResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
+import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, DailyTokenUsage, DeleteWorkspaceFileResponse, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitDiffResponse, GitFileState, GitStatusFile, GitStatusResponse, Machine, MachineHealth, MachineKind, MachineRuntime, MachineStatus, MessagePage, ModelSelectionResponse, MoveWorkspaceFileResponse, OAuthFlowState, PiWebCapability, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebPluginConfigMap, PiWebPluginInfo, PiWebPluginsResponse, PiWebPluginScope, PiWebReleaseStatus, PiWebRuntimeComponent, PiWebRuntimeResponse, PiWebServiceComponent, PiWebShortcutConfig, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SavedPromptAttachment, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevelsResponse, TokenUsageSummary, TokenUsageSummaryResponse, WriteWorkspaceFileResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
 import { isPiWebCapability } from "../../../shared/capabilities";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -463,6 +463,51 @@ export function parseWorkspaceActivityResponse(value: unknown): WorkspaceActivit
   return { workspaces: arrayOf(parseWorkspaceActivity)(record["workspaces"]), generatedAt: requireString(record, "generatedAt") };
 }
 
+export function parseTokenUsageSummaryResponse(value: unknown): TokenUsageSummaryResponse {
+  const record = requireRecord(value);
+  return { summary: parseTokenUsageSummary(record["summary"]) };
+}
+
+export function parseTokenUsageSummary(value: unknown): TokenUsageSummary {
+  const record = requireRecord(value);
+  return {
+    totalSessions: requireNumber(record, "totalSessions"),
+    totalMessages: requireNumber(record, "totalMessages"),
+    totalTokens: requireNumber(record, "totalTokens"),
+    activeDays: requireNumber(record, "activeDays"),
+    currentStreak: requireNumber(record, "currentStreak"),
+    longestStreak: requireNumber(record, "longestStreak"),
+    peakHour: record["peakHour"] === null ? null : requireString(record, "peakHour"),
+    favoriteModel: record["favoriteModel"] === null ? null : parseFavoriteModel(record["favoriteModel"]),
+    tokensByDay: arrayOf(parseDailyTokenUsage)(record["tokensByDay"]),
+    comparison: record["comparison"] === undefined ? undefined : parseComparison(record["comparison"]),
+  };
+}
+
+function parseFavoriteModel(value: unknown): { provider: string; id: string; name?: string } {
+  const record = requireRecord(value);
+  return {
+    provider: requireString(record, "provider"),
+    id: requireString(record, "id"),
+    ...optionalField("name", optionalString(record, "name")),
+  };
+}
+
+function parseComparison(value: unknown): { text: string } {
+  const record = requireRecord(value);
+  return { text: requireString(record, "text") };
+}
+
+function parseDailyTokenUsage(value: unknown): DailyTokenUsage {
+  const record = requireRecord(value);
+  return {
+    date: requireString(record, "date"),
+    input: requireNumber(record, "input"),
+    output: requireNumber(record, "output"),
+    total: requireNumber(record, "total"),
+  };
+}
+
 export function parsePiWebConfigResponse(value: unknown): PiWebConfigResponse {
   const record = requireRecord(value);
   return {
@@ -782,12 +827,6 @@ export function parseDeleted(value: unknown): { deleted: true } {
   const record = requireRecord(value);
   if (record["deleted"] !== true) throw new Error("Expected deleted response");
   return { deleted: true };
-}
-
-export function parseDetached(value: unknown): { detached: true } {
-  const record = requireRecord(value);
-  if (record["detached"] !== true) throw new Error("Expected detached response");
-  return { detached: true };
 }
 
 export function parseReloaded(value: unknown): { reloaded: true } {

@@ -276,6 +276,14 @@ export function registerSessionRoutes(app: FastifyInstance, sessions: PiSessionS
   app.get(`${prefix}/events`, { websocket: true }, (socket) => {
     eventHub.addGlobal(socket);
   });
+
+  app.get(`${prefix}/usage`, async (_request, reply) => {
+    try {
+      return { summary: await sessions.usageSummary() };
+    } catch (error) {
+      return reply.code(500).send({ error: errorMessage(error) });
+    }
+  });
 }
 
 function sessionLookupFromQuery(id: string, query: SessionQuery): SessionLookup {

@@ -14,7 +14,7 @@ import {
   type CreateAgentSessionRuntimeFactory,
   type EditToolDetails,
 } from "@earendil-works/pi-coding-agent";
-import type { ClientArchiveSessionsResponse, ClientCommand, ClientCommandResult, ClientMessagePage, ClientSession, ClientSessionModel, ClientSessionRef, ClientSessionStatus, ClientThinkingLevel, SessionUiEvent } from "../types.js";
+import type { ClientArchiveSessionsResponse, ClientCommand, ClientCommandResult, ClientMessagePage, ClientSession, ClientSessionModel, ClientSessionRef, ClientSessionStatus, ClientThinkingLevel, DailyTokenUsage, SessionUiEvent, TokenUsageSummary } from "../types.js";
 import { pageMessagesAtSafeBoundary } from "./messagePaging.js";
 import type { SessionEventHub } from "../realtime/sessionEventHub.js";
 import { BUILTIN_COMMANDS } from "./builtinCommands.js";
@@ -47,9 +47,10 @@ import type { SpawnTargetDecision, SpawnTargetResolver } from "./spawnTargetReso
  */
 export interface PiSessionLogger {
   info(details: Record<string, unknown>, message: string): void;
+  warn?(details: Record<string, unknown>, message: string): void;
 }
 
-const noopLogger: PiSessionLogger = { info() { /* no-op */ } };
+const noopLogger: PiSessionLogger = { info() { /* no-op */ }, warn() { /* no-op */ } };
 
 function noop(): void {
   // Intentionally empty default unsubscribe callback.
@@ -860,6 +861,47 @@ export class PiSessionService {
     return this.statusFromSession(await this.getOrOpen(ref));
   }
 
+  async usageSummary(): Promise<TokenUsageSummary> {
+    if (this.sessionManager.listAll === undefined) {
+      return emptyTokenUsageSummary();
+    }
+    const allSessions = await this.sessionManager.listAll();
+    const sessionStats: SessionStatsForUsage[] = [];
+    for (const entry of allSessions) {
+      try {
+        const stats = await this.sessionStatsForEntry(entry);
+        if (stats !== undefined) sessionStats.push(stats);
+      } catch (error) {
+        this.logger.warn?.({ sessionId: entry.id, path: entry.path, error: errorMessage(error) }, "failed to collect session usage stats");
+      }
+    }
+    return buildTokenUsageSummary(sessionStats);
+  }
+
+  private async sessionStatsForEntry(entry: PiSessionListEntry): Promise<SessionStatsForUsage | undefined> {
+    const active = this.activeForPath(entry.path);
+    if (active !== undefined) {
+      const session = active.runtime.session;
+      const stats = session.getSessionStats();
+      return sessionStatsForUsageFromStats(stats, entry);
+    }
+    const manager = this.sessionManager.open(entry.path);
+    const runtime = await this.createAgentRuntime(this.createRuntime, { cwd: entry.cwd, agentDir: this.agentDir, sessionManager: manager });
+    try {
+      const stats = runtime.session.getSessionStats();
+      return sessionStatsForUsageFromStats(stats, entry);
+    } finally {
+      await runtime.dispose();
+    }
+  }
+
+  private activeForPath(path: string): ActiveSession<PiSessionRuntime> | undefined {
+    for (const active of this.active.values()) {
+      if (active.runtime.session.sessionFile === path) return active;
+    }
+    return undefined;
+  }
+
   async availableModels(ref: PiSessionLookup): Promise<ClientSessionModel[]> {
     const session = await this.getOrOpen(ref);
     session.modelRegistry.refresh();
@@ -1633,6 +1675,148 @@ function archiveInputFromActiveSession(session: PiAgentSession): ArchiveSessionI
     ...(session.sessionName === undefined ? {} : { name: session.sessionName }),
     ...(parentSessionPath === undefined ? {} : { parentSessionPath }),
   };
+}
+
+interface SessionStatsForUsage {
+  sessionId: string;
+  cwd: string;
+  created: Date;
+  modified: Date;
+  totalMessages: number;
+  userMessages: number;
+  assistantMessages: number;
+  toolCalls: number;
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  cost: number;
+  model: { provider: string; id: string; name?: string } | undefined;
+}
+
+function sessionStatsForUsageFromStats(stats: { sessionId: string; sessionFile?: string | undefined; totalMessages: number; userMessages: number; assistantMessages: number; toolCalls: number; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number }; cost: number }, entry: PiSessionListEntry): SessionStatsForUsage {
+  return {
+    sessionId: stats.sessionId,
+    cwd: entry.cwd,
+    created: entry.created,
+    modified: entry.modified,
+    totalMessages: stats.totalMessages,
+    userMessages: stats.userMessages,
+    assistantMessages: stats.assistantMessages,
+    toolCalls: stats.toolCalls,
+    tokens: stats.tokens,
+    cost: stats.cost,
+    model: undefined,
+  };
+}
+
+function emptyTokenUsageSummary(): TokenUsageSummary {
+  return {
+    totalSessions: 0,
+    totalMessages: 0,
+    totalTokens: 0,
+    activeDays: 0,
+    currentStreak: 0,
+    longestStreak: 0,
+    peakHour: null,
+    favoriteModel: null,
+    tokensByDay: [],
+  };
+}
+
+function buildTokenUsageSummary(sessions: SessionStatsForUsage[]): TokenUsageSummary {
+  if (sessions.length === 0) return emptyTokenUsageSummary();
+  const totalSessions = sessions.length;
+  const totalMessages = sessions.reduce((sum, session) => sum + session.totalMessages, 0);
+  const totalTokens = sessions.reduce((sum, session) => sum + session.tokens.total, 0);
+  const totalCost = sessions.reduce((sum, session) => sum + session.cost, 0);
+
+  const dayMap = new Map<string, DailyTokenUsage>();
+  const hourCounts = new Map<number, number>();
+  const activeDaySet = new Set<string>();
+  const modelCounts = new Map<string, { provider: string; id: string; name?: string; count: number; tokens: number }>();
+
+  for (const session of sessions) {
+    const dateKey = formatUsageDate(session.modified);
+    activeDaySet.add(dateKey);
+    const day = dayMap.get(dateKey) ?? { date: dateKey, input: 0, output: 0, total: 0 };
+    day.input += session.tokens.input;
+    day.output += session.tokens.output;
+    day.total += session.tokens.total;
+    dayMap.set(dateKey, day);
+
+    const hour = session.modified.getHours();
+    hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + session.tokens.total);
+
+    if (session.model !== undefined) {
+      const key = `${session.model.provider}/${session.model.id}`;
+      const existing = modelCounts.get(key);
+      if (existing === undefined) {
+        modelCounts.set(key, { ...session.model, count: 1, tokens: session.tokens.total });
+      } else {
+        existing.count += 1;
+        existing.tokens += session.tokens.total;
+      }
+    }
+  }
+
+  const peakHourEntry = Array.from(hourCounts.entries()).sort((a, b) => b[1] - a[1])[0];
+  const peakHour = peakHourEntry === undefined ? null : formatHour(peakHourEntry[0]);
+  const favoriteModelEntry = Array.from(modelCounts.values()).sort((a, b) => b.tokens - a.tokens)[0];
+  const favoriteModel = favoriteModelEntry === undefined ? null : { provider: favoriteModelEntry.provider, id: favoriteModelEntry.id, ...(favoriteModelEntry.name === undefined ? {} : { name: favoriteModelEntry.name }) };
+
+  const tokensByDay = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const activeDays = activeDaySet.size;
+  const { currentStreak, longestStreak } = computeStreaks(activeDaySet);
+
+  return {
+    totalSessions,
+    totalMessages,
+    totalTokens,
+    activeDays,
+    currentStreak,
+    longestStreak,
+    peakHour,
+    favoriteModel,
+    tokensByDay,
+    comparison: totalCost > 0 ? { text: `Total cost: $${totalCost.toFixed(4)}` } : undefined,
+  };
+}
+
+function formatUsageDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatHour(hour: number): string {
+  const period = hour >= 12 ? "PM" : "AM";
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return `${String(display)} ${period}`;
+}
+
+function computeStreaks(activeDays: Set<string>): { currentStreak: number; longestStreak: number } {
+  if (activeDays.size === 0) return { currentStreak: 0, longestStreak: 0 };
+  const dates = Array.from(activeDays).sort();
+  let longestStreak = 1;
+  let currentStreak = 1;
+  for (let i = 1; i < dates.length; i++) {
+    const previousDate = dates[i - 1];
+    const currentDate = dates[i];
+    if (previousDate === undefined || currentDate === undefined) continue;
+    const prev = new Date(previousDate);
+    const curr = new Date(currentDate);
+    const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays === 1) {
+      currentStreak += 1;
+      longestStreak = Math.max(longestStreak, currentStreak);
+    } else {
+      currentStreak = 1;
+    }
+  }
+  const today = formatUsageDate(new Date());
+  const lastActive = dates[dates.length - 1];
+  const isCurrentActive = lastActive === today || lastActive === formatUsageDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  return { currentStreak: isCurrentActive ? currentStreak : 0, longestStreak };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function archiveCandidateFromListEntry(session: PiSessionListEntry): WorkspaceArchiveCandidate {

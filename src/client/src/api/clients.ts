@@ -10,7 +10,6 @@ import {
   parseCommandResult,
   parseDeleted,
   parseDeleteWorkspaceFileResponse,
-  parseDetached,
   parseFileContentResponse,
   parseFileSuggestion,
   parseFileTreeResponse,
@@ -39,6 +38,7 @@ import {
   parseTerminalCommandRun,
   parseTerminalInfo,
   parseThinkingLevelsResponse,
+  parseTokenUsageSummaryResponse,
   parseWriteWorkspaceFileResponse,
   parseWorkspace,
   parseWorkspaceActivityResponse,
@@ -172,8 +172,9 @@ export const sessionsApi = {
   archiveWithDescendants: (session: SessionLookup, machineId = "local") => request(sessionUrl(session, "archive-tree", machineId), parseArchived, { method: "POST", body: sessionBody(session) }),
   restore: (session: SessionLookup, machineId = "local") => request(sessionUrl(session, "restore", machineId), parseRestored, { method: "POST", body: sessionBody(session) }),
   deleteArchived: (session: SessionLookup, machineId = "local") => request(sessionBaseQueryUrl(session, machineId), parseDeleted, { method: "DELETE" }),
-  detachParent: (session: SessionLookup, machineId = "local") => request(sessionUrl(session, "detach-parent", machineId), parseDetached, { method: "POST", body: sessionBody(session) }),
+  detachParent: (session: SessionLookup, machineId = "local") => request(sessionUrl(session, "detach-parent", machineId), parseReloaded, { method: "POST", body: sessionBody(session) }),
   reloadSession: (session: SessionLookup, machineId = "local") => request(sessionUrl(session, "reload", machineId), parseReloaded, { method: "POST", body: sessionBody(session) }),
+  usageSummary: (machineId = "local") => request(`${machinePrefix(machineId)}/usage`, parseTokenUsageSummaryResponse),
   authProviders: (options?: { mode?: "login" | "logout"; authType?: "oauth" | "api_key"; machineId?: string }) => {
     const params = new URLSearchParams();
     if (options?.mode !== undefined) params.set("mode", options.mode);

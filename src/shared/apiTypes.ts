@@ -286,6 +286,26 @@ export interface SessionStatus {
   contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
 }
 
+export interface DailyTokenUsage {
+  date: string;
+  input: number;
+  output: number;
+  total: number;
+}
+
+export interface TokenUsageSummary {
+  totalSessions: number;
+  totalMessages: number;
+  totalTokens: number;
+  activeDays: number;
+  currentStreak: number;
+  longestStreak: number;
+  peakHour: string | null;
+  favoriteModel: { provider: string; id: string; name?: string } | null;
+  tokensByDay: DailyTokenUsage[];
+  comparison?: { text: string } | undefined;
+}
+
 export interface WorkspaceActivity {
   cwd: string;
   hasSessionActivity: boolean;
@@ -296,6 +316,10 @@ export interface WorkspaceActivity {
 export interface WorkspaceActivityResponse {
   workspaces: WorkspaceActivity[];
   generatedAt: string;
+}
+
+export interface TokenUsageSummaryResponse {
+  summary: TokenUsageSummary;
 }
 
 export interface ExtensionOverlay {
