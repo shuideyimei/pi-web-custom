@@ -1,4 +1,4 @@
-import type { AuthProviderOption, CommandOption, CommandResult, ExtensionOverlay, FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Machine, MachineHealth, MachineRuntime, OAuthFlowState, PiWebStatusResponse, Project, SessionActivity, SessionInfo, SessionStatus, TerminalCommandRun, Workspace, WorkspaceActivity } from "./api";
+import type { AuthProviderOption, CommandOption, CommandResult, ExtensionOverlay, FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Machine, MachineHealth, MachineRuntime, OAuthFlowState, PiWebStatusResponse, Project, SessionActivity, SessionInfo, SessionStatus, TerminalCommandRun, TokenUsageSummary, Workspace, WorkspaceActivity } from "./api";
 import type { ChatLine } from "./components/shared";
 import type { QualifiedContributionId } from "./plugins/ids";
 import type { WorkspaceUploadBatchState } from "./workspaceUploadState";
@@ -46,7 +46,7 @@ export interface AppState {
   projectDialogOpen: boolean;
   machineDialogOpen: boolean;
   workspaceTool: QualifiedContributionId;
-  mainView: "navigation" | "chat" | QualifiedContributionId;
+  mainView: "navigation" | "chat" | "home" | QualifiedContributionId;
   fileTree: FileTreeEntry[];
   expandedDirs: Record<string, FileTreeEntry[]>;
   selectedFilePath: string | undefined;
@@ -62,6 +62,8 @@ export interface AppState {
   activeTerminalCount: number;
   selectedTerminalId: string | undefined;
   piWebStatus: PiWebStatusResponse | undefined;
+  tokenUsageSummary: TokenUsageSummary | undefined;
+  tokenUsageSummaryLoading: boolean;
   error: string;
   toasts: ToastItem[];
 }
@@ -148,7 +150,7 @@ export function initialAppState(): AppState {
     projectDialogOpen: false,
     machineDialogOpen: false,
     workspaceTool: "core:workspace.summary",
-    mainView: "chat",
+    mainView: "home",
     fileTree: [],
     expandedDirs: {},
     selectedFilePath: undefined,
@@ -163,6 +165,8 @@ export function initialAppState(): AppState {
     activeTerminalCount: 0,
     selectedTerminalId: undefined,
     piWebStatus: undefined,
+    tokenUsageSummary: undefined,
+    tokenUsageSummaryLoading: false,
     error: "",
     toasts: [],
   };

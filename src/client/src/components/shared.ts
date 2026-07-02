@@ -149,7 +149,7 @@ export const appStyles = css`
     .context-bar { display: flex; }
     .mobile-navigation-tab { display: block; }
     main.navigation-view chat-view, main.navigation-view prompt-editor, main.navigation-view status-bar,
-    main.navigation-view .empty { display: none; }
+    main.navigation-view .empty, main.navigation-view token-usage-dashboard { display: none; }
     main.navigation-view .mobile-navigation-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
     main.navigation-view .mobile-navigation-panel app-navigation-panel { flex: 1 1 auto; min-height: 0; }
     main.navigation-view .mobile-navigation-panel project-list,

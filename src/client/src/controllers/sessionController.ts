@@ -61,7 +61,7 @@ export class SessionController {
     this.clearPendingTranscriptEvents();
   }
 
-  clearActiveSession() {
+  clearActiveSession(options?: { mainView?: AppState["mainView"] | undefined }) {
     this.selectionSeq += 1;
     this.socket.close();
     this.catchupStreamSessionId = undefined;
@@ -70,14 +70,14 @@ export class SessionController {
     // session must not cancel the in-flight upload indicator of the session
     // that is still sending; the per-session entry is cleared by send()'s
     // finally block when the request settles.
-    this.setState({ selectedSession: undefined, messages: [], messagePageStart: 0, messagePageEnd: 0, messagePageTotal: 0, isLoadingEarlierMessages: false, isReceivingPartialStream: false, status: undefined, activity: undefined, availableThinkingLevels: [], extensionOverlay: undefined });
+    this.setState({ selectedSession: undefined, messages: [], messagePageStart: 0, messagePageEnd: 0, messagePageTotal: 0, isLoadingEarlierMessages: false, isReceivingPartialStream: false, status: undefined, activity: undefined, availableThinkingLevels: [], extensionOverlay: undefined, ...(options?.mainView === undefined ? {} : { mainView: options.mainView }) });
   }
 
   deselectSession(options?: { forgetRememberedSelection?: boolean | undefined; updateUrl?: boolean | undefined }) {
     const state = this.getState();
     const cwd = state.selectedSession?.cwd ?? state.selectedWorkspace?.path;
     if (options?.forgetRememberedSelection === true && cwd !== undefined) this.sessionSelection.forgetWorkspace(this.workspaceSelectionKey(cwd));
-    this.clearActiveSession();
+    this.clearActiveSession({ mainView: "home" });
     if (options?.updateUrl !== false) this.updateUrl();
   }
 
@@ -98,7 +98,7 @@ export class SessionController {
       // Drop any entry the session.created broadcast may have inserted for this
       // same session before the HTTP response resolved, so the cached marker
       // (and its delete action) wins instead of leaving a duplicate badge.
-      this.setState({ sessions: [cachedSession, ...this.getState().sessions.filter((candidate) => candidate.id !== cachedSession.id)] });
+      this.setState({ sessions: [cachedSession, ...this.getState().sessions.filter((candidate) => candidate.id !== cachedSession.id)], mainView: "chat" });
       await this.selectSession(cachedSession);
     } catch (error) {
       this.setState({ error: String(error) });
@@ -125,6 +125,7 @@ export class SessionController {
       status: session.archived === true ? undefined : this.getState().sessionStatuses[session.id],
       activity: session.archived === true ? undefined : this.getState().sessionActivities[session.id],
       extensionOverlay: undefined,
+      mainView: "chat",
     });
     try {
       if (session.archived === true) {

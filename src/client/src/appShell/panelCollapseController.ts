@@ -45,8 +45,9 @@ export class PanelCollapseController implements ReactiveController {
   }
 }
 
-export function mainViewClass(mainView: AppState["mainView"]): "navigation-view" | "chat-view" | "workspace-view" {
+export function mainViewClass(mainView: AppState["mainView"]): "navigation-view" | "chat-view" | "workspace-view" | "home-view" {
   if (mainView === "navigation") return "navigation-view";
   if (mainView === "chat") return "chat-view";
+  if (mainView === "home") return "home-view";
   return "workspace-view";
 }

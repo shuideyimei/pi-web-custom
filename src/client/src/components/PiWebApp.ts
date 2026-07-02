@@ -1,8 +1,9 @@
 import { LitElement, html } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
-import { configApi, effectiveWorkspaceUploadFolder, EXTENSION_OVERLAY_CLOSE_VALUE, EXTENSION_OVERLAY_KEY_PREFIX, piWebApi, sessionsApi, terminalsApi, workspacesApi, workspaceEffectiveUploadFolder, type Machine, type MachineHealth, type PiWebConfigValues, type PiWebShortcutConfig, type Project, type RealtimeEvent, type SessionInfo, type SlashCommand, type TerminalCommandRun, type TerminalUiEvent, type Workspace } from "../api";
+import { configApi, effectiveWorkspaceUploadFolder, EXTENSION_OVERLAY_CLOSE_VALUE, EXTENSION_OVERLAY_KEY_PREFIX, piWebApi, sessionsApi, terminalsApi, workspacesApi, workspaceEffectiveUploadFolder, type Machine, type MachineHealth, type PiWebConfigValues, type PiWebShortcutConfig, type Project, type RealtimeEvent, type SessionInfo, type SlashCommand, type TerminalCommandRun, type TerminalUiEvent, type TokenUsageSummary, type Workspace } from "../api";
 import type { AppAction } from "../actions";
 import { initialAppState, type AppState } from "../appState";
+import { isCachedNewSessionInfo } from "../cachedNewSessions";
 import { isSessionActive } from "../../../shared/activity";
 import { PI_WEB_CAPABILITIES, supportsPiWebCapability } from "../../../shared/capabilities";
 import { ActivityController } from "../controllers/activityController";
@@ -32,6 +33,7 @@ import { NavigationSectionsController, type NavigationSection } from "../appShel
 import { PanelCollapseController, mainViewClass } from "../appShell/panelCollapseController";
 import { PanelResizeController, type PanelResizeConstraints, type ResizablePanelSide } from "../appShell/panelResizeController";
 import { readRoute, writeRoute, type AppRoute } from "../route";
+import { parseTokenUsageSummary } from "../api/parsers";
 import { readSettingsSection, writeSettingsSection, type SettingsSection } from "../settingsRoute";
 import { applyActiveShortcutPreferences } from "../shortcutPreferences";
 import { isWebSlashCommandName, parseSlashCommandInput, settingsSectionFromSlashArgument, slashCommandArguments } from "../slashCommands";
@@ -65,11 +67,14 @@ import type { AppMobileMainTab, AppMobileMainTabIcon } from "./appShell/AppMobil
 import { shouldShowMachinesSection, type AppNavigationPanel, type NavigationFocusTarget } from "./appShell/AppNavigationPanel";
 import "./appShell/AppPanelEdgeControl";
 import "./appShell/AppRefreshControl";
+import "./TokenUsageDashboard";
 import { appStyles } from "./shared";
 
 
 const PI_WEB_STATUS_REFRESH_MS = 15 * 60 * 1000;
 const PI_WEB_STATUS_DEFER_MS = 750;
+const TOKEN_USAGE_SUMMARY_REFRESH_MS = 60 * 1000;
+const TOKEN_USAGE_SUMMARY_CACHE_KEY = "pi-web:token-usage-summary:v1";
 const REMOTE_ROUTE_RESTORE_RETRY_DELAYS_MS = [1_000, 3_000, 8_000, 15_000, 30_000] as const;
 const GLOBAL_SHORTCUT_LISTENER_OPTIONS = { capture: true } as const;
 const THEME_AUTO_ON_VALUE = "auto:on";
@@ -152,6 +157,9 @@ export class PiWebApp extends LitElement {
   private terminalAutoStartWorkspaceId: string | undefined;
   private piWebStatusTimer: number | undefined;
   private piWebStatusDeferredTimer: number | undefined;
+  private tokenUsageSummaryRequest: { machineId: string; promise: Promise<void> } | undefined;
+  private tokenUsageSummaryMachineId: string | undefined;
+  private tokenUsageSummaryFetchedAt = 0;
   private workspaceDeletionPollTimer: number | undefined;
   private refreshingWorkspaceDeletionRuns = false;
   private readonly handledWorkspaceDeletionRunIds = new Set<string>();
@@ -187,6 +195,7 @@ export class PiWebApp extends LitElement {
     this.appShell.repairViewportPosition();
     void this.sessions.refreshSelectedSession();
     this.schedulePiWebStatusRefresh();
+    void this.refreshTokenUsageSummary();
     void this.refreshMachineActivities();
     void this.refreshWorkspaceDeletionRuns();
     this.retryPendingRemoteRouteRestoreSoon();
@@ -196,6 +205,7 @@ export class PiWebApp extends LitElement {
       this.appShell.repairViewportPosition();
       void this.sessions.refreshSelectedSession();
       this.schedulePiWebStatusRefresh();
+      void this.refreshTokenUsageSummary();
       void this.refreshMachineActivities();
       void this.refreshWorkspaceDeletionRuns();
       this.retryPendingRemoteRouteRestoreSoon();
@@ -237,7 +247,7 @@ export class PiWebApp extends LitElement {
     void this.refreshWorkspaceActivity();
     void this.loadClientConfig();
     void this.ensureGatewayPluginsLoaded();
-    void this.loadProjectsAndRestoreRoute().finally(() => { this.schedulePiWebStatusRefresh(); });
+    void this.loadProjectsAndRestoreRoute().finally(() => { this.schedulePiWebStatusRefresh(); void this.refreshTokenUsageSummary(); });
   }
 
   override disconnectedCallback(): void {
@@ -314,6 +324,47 @@ export class PiWebApp extends LitElement {
     }
   }
 
+  private async refreshTokenUsageSummary(options?: { force?: boolean | undefined }): Promise<void> {
+    const machineId = selectedMachineId(this.state);
+    const hasCurrentSummary = this.tokenUsageSummaryMachineId === machineId && this.state.tokenUsageSummary !== undefined;
+    const isFresh = hasCurrentSummary && Date.now() - this.tokenUsageSummaryFetchedAt < TOKEN_USAGE_SUMMARY_REFRESH_MS;
+    if (options?.force !== true && isFresh) return;
+    if (this.tokenUsageSummaryRequest?.machineId === machineId) return this.tokenUsageSummaryRequest.promise;
+
+    if (this.tokenUsageSummaryMachineId !== machineId) {
+      const cached = readCachedTokenUsageSummary(machineId);
+      this.tokenUsageSummaryMachineId = machineId;
+      this.tokenUsageSummaryFetchedAt = cached?.savedAt ?? 0;
+      this.setState({ tokenUsageSummary: cached?.summary, tokenUsageSummaryLoading: cached === undefined });
+    } else if (!hasCurrentSummary) {
+      const cached = readCachedTokenUsageSummary(machineId);
+      if (cached !== undefined) {
+        this.tokenUsageSummaryFetchedAt = cached.savedAt;
+        this.setState({ tokenUsageSummary: cached.summary, tokenUsageSummaryLoading: false });
+      } else {
+        this.setState({ tokenUsageSummaryLoading: true });
+      }
+    }
+
+    const request = (async () => {
+      try {
+        const response = await sessionsApi.usageSummary(machineId);
+        if (selectedMachineId(this.state) !== machineId) return;
+        this.tokenUsageSummaryMachineId = machineId;
+        this.tokenUsageSummaryFetchedAt = Date.now();
+        writeCachedTokenUsageSummary(machineId, response.summary, this.tokenUsageSummaryFetchedAt);
+        this.setState({ tokenUsageSummary: response.summary, tokenUsageSummaryLoading: false });
+      } catch (error) {
+        if (selectedMachineId(this.state) === machineId) this.setState({ tokenUsageSummaryLoading: false });
+        console.warn(`Failed to refresh token usage summary for ${machineId}`, error);
+      } finally {
+        if (this.tokenUsageSummaryRequest?.machineId === machineId) this.tokenUsageSummaryRequest = undefined;
+      }
+    })();
+    this.tokenUsageSummaryRequest = { machineId, promise: request };
+    return request;
+  }
+
   private async refreshWorkspaceActivity(machineId = selectedMachineId(this.state)): Promise<void> {
     try {
       await this.activity.refresh(machineId);
@@ -350,6 +401,7 @@ export class PiWebApp extends LitElement {
     try {
       await Promise.all([
         this.sessions.refreshSelectedSession(),
+        this.refreshTokenUsageSummary(),
         this.refreshMachineActivities(),
         this.loadClientConfig(),
         this.refreshWorkspaceDeletionRuns(),
@@ -381,6 +433,7 @@ export class PiWebApp extends LitElement {
   private async restoreRouteFor(route: AppRoute, updateUrl: boolean, surface = this.readWorkspaceRouteSurface(route), restoredMainView?: AppState["mainView"]) {
     const machineBeforeRestore = selectedMachineId(this.state);
     const routeSurface = route.projectId === undefined || route.projectId === "" ? emptyWorkspaceRouteSurface() : surface;
+    const restoredView = restoredMainView ?? route.view ?? (route.sessionId !== undefined ? "chat" : this.defaultRouteView());
     const restoreSeq = ++this.routeRestoreSeq;
     this.routeRestoreDepth += 1;
     this.restoringRouteTerminalId = routeSurface.selectedTerminalId;
@@ -391,7 +444,7 @@ export class PiWebApp extends LitElement {
       if (!this.isCurrentRouteRestore(restoreSeq)) return;
       this.setState({
         workspaceTool: route.tool ?? this.state.workspaceTool,
-        mainView: restoredMainView ?? route.view ?? this.defaultRouteView(),
+        mainView: restoredView,
         selectedFilePath: routeSurface.selectedFilePath,
         selectedDiffPath: routeSurface.selectedDiffPath,
         selectedTerminalId: routeSurface.selectedTerminalId,
@@ -415,7 +468,7 @@ export class PiWebApp extends LitElement {
       }
       await this.workspaces.selectProject(project, { workspaceId: route.workspaceId, sessionId: route.sessionId, updateUrl: false });
       if (!this.isCurrentRouteRestore(restoreSeq)) return;
-      this.setState({ selectedFilePath: routeSurface.selectedFilePath, selectedDiffPath: routeSurface.selectedDiffPath, selectedTerminalId: routeSurface.selectedTerminalId });
+      this.setState({ mainView: restoredView, selectedFilePath: routeSurface.selectedFilePath, selectedDiffPath: routeSurface.selectedDiffPath, selectedTerminalId: routeSurface.selectedTerminalId });
       if (routeSurface.selectedTerminalId !== undefined) this.rememberSelectedTerminal(routeSurface.selectedTerminalId);
       await this.refreshRestoredWorkspaceTool(route.tool, routeSurface.selectedFilePath);
       this.git.updatePolling();
@@ -736,7 +789,7 @@ export class PiWebApp extends LitElement {
   }
 
   private selectMainView(view: AppState["mainView"]) {
-    if (view !== "navigation" && view !== "chat") {
+    if (view !== "navigation" && view !== "chat" && view !== "home") {
       this.openWorkspaceTool(view);
       return;
     }
@@ -1906,6 +1959,7 @@ export class PiWebApp extends LitElement {
   private mobileMainTabs(): AppMobileMainTab[] {
     return [
       { id: "navigation", label: "Sessions", icon: "navigation", className: "navigation-tab" },
+      { id: "home", label: "Home", icon: "summary" },
       { id: "chat", label: "Chat", icon: "chat" },
       ...this.visibleWorkspacePanels().map((panel): AppMobileMainTab => {
         const icon = panel.icon ?? this.mobilePanelIcon(panel);
@@ -1923,6 +1977,10 @@ export class PiWebApp extends LitElement {
     return html`<app-refresh-control .onReload=${() => { this.hardReloadApp(); }}></app-refresh-control>`;
   }
 
+  private shouldShowSessionUsageDashboard(state: AppState): boolean {
+    return state.mainView === "chat" && isCachedNewSessionInfo(state.selectedSession);
+  }
+
   override render() {
     const state = this.state;
     const sessionActive = isSessionActive(state.status, state.activity);
@@ -1937,8 +1995,8 @@ export class PiWebApp extends LitElement {
           ${this.renderMobileMainTabs()}
           ${state.error ? html`<div class="error">${state.error}</div>` : null}
           <div class="mobile-navigation-panel">${this.appShell.isMobileNavigationLayout ? this.renderNavigationPanel() : null}</div>
-          ${state.selectedSession ? html`
-            <chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .workspacePath=${state.selectedWorkspace?.path} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string) => { void this.git.selectDiff(path); }}></chat-view>
+          ${state.mainView === "home" ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading} .onStartSession=${state.selectedWorkspace !== undefined ? () => { void this.sessions.startSession(); } : undefined}></token-usage-dashboard>` : state.selectedSession ? html`
+            ${this.shouldShowSessionUsageDashboard(state) ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading}></token-usage-dashboard>` : html`<chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .workspacePath=${state.selectedWorkspace?.path} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string) => { void this.git.selectDiff(path); }}></chat-view>`}
             <prompt-editor .sessionId=${state.selectedSession.id} .cwd=${state.selectedWorkspace?.path} .machineId=${selectedMachineId(state)} .projectId=${state.selectedWorkspace?.projectId} .workspaceId=${state.selectedWorkspace?.id} .workspaceScopedFileSuggestions=${this.supportsWorkspaceFileSuggestions()} .disabled=${state.selectedSession.archived === true} .canSteer=${state.status?.isStreaming === true} .isCompacting=${state.status?.isCompacting === true} .canStop=${canStopSession} .status=${state.status} .availableThinkingLevels=${state.availableThinkingLevels} .sending=${state.sendingPrompts[state.selectedSession.id] === true} .onSend=${(text: string, streamingBehavior?: "steer" | "followUp", attachments?: import("../api").PromptAttachment[], delivery?: import("../../../shared/apiTypes").PromptAttachmentDelivery) => { this.sendPrompt(text, streamingBehavior, attachments, delivery); }} .onStop=${() => this.sessions.stopActiveWork()} .onSelectModel=${() => { void this.openModelDialog(); }} .onSelectThinking=${() => { void this.openThinkingDialog(); }}></prompt-editor>
             <status-bar .status=${state.status}></status-bar>
             ${state.commandDialog !== undefined ? html`<command-picker .title=${state.commandDialog.title} .options=${state.commandDialog.options} .onPick=${(value: string) => this.sessions.respondToCommand(state.commandDialog?.requestId ?? "", value)} .onCancel=${() => { this.sessions.cancelCommand(); }}></command-picker>` : null}
@@ -1999,6 +2057,36 @@ function shouldRefreshMachineActivity(machine: Machine, health: MachineHealth | 
 
 function patchChangesState(state: AppState, patch: Partial<AppState>): boolean {
   return Object.entries(patch).some(([key, value]) => Reflect.get(state, key) !== value);
+}
+
+function readCachedTokenUsageSummary(machineId: string): { summary: TokenUsageSummary; savedAt: number } | undefined {
+  try {
+    if (typeof localStorage === "undefined") return undefined;
+    const raw = localStorage.getItem(TOKEN_USAGE_SUMMARY_CACHE_KEY);
+    if (raw === null || raw === "") return undefined;
+    const value: unknown = JSON.parse(raw);
+    if (!isTokenUsageSummaryCacheRecord(value) || value.machineId !== machineId) return undefined;
+    return { summary: parseTokenUsageSummary(value.summary), savedAt: value.savedAt };
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedTokenUsageSummary(machineId: string, summary: TokenUsageSummary, savedAt: number): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(TOKEN_USAGE_SUMMARY_CACHE_KEY, JSON.stringify({ machineId, savedAt, summary }));
+  } catch {
+    // Ignore localStorage quota/privacy errors. The dashboard can still refresh from the API.
+  }
+}
+
+function isTokenUsageSummaryCacheRecord(value: unknown): value is { machineId: string; savedAt: number; summary: unknown } {
+  return typeof value === "object"
+    && value !== null
+    && typeof Reflect.get(value, "machineId") === "string"
+    && typeof Reflect.get(value, "savedAt") === "number"
+    && Reflect.has(value, "summary");
 }
 
 function isActive(state: Pick<AppState, "status" | "activity">): boolean {

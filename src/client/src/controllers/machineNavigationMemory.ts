@@ -131,7 +131,7 @@ function parseWorkspaceRouteSurface(value: unknown): WorkspaceRouteSurface {
 }
 
 function parseMainView(value: string | undefined): AppState["mainView"] | undefined {
-  if (value === "navigation" || value === "chat") return value;
+  if (value === "navigation" || value === "chat" || value === "home") return value;
   return parseQualifiedId(value);
 }
 

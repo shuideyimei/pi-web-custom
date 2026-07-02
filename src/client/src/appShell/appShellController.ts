@@ -51,7 +51,7 @@ export class AppShellController implements ReactiveController {
   }
 
   defaultRouteView(): AppState["mainView"] {
-    return this.isMobileNavigationLayout ? "navigation" : "chat";
+    return this.isMobileNavigationLayout ? "navigation" : "home";
   }
 
   repairViewportPosition(): void {
