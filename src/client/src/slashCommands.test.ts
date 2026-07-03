@@ -23,12 +23,17 @@ describe("slashCommands", () => {
   });
 
   it("maps settings aliases to settings sections", () => {
-    expect(settingsSectionFromSlashArgument(undefined)).toBe("general");
+    expect(settingsSectionFromSlashArgument(undefined)).toBe("appearance");
+    expect(settingsSectionFromSlashArgument("theme")).toBe("appearance");
     expect(settingsSectionFromSlashArgument("hotkeys")).toBe("shortcuts");
+    expect(settingsSectionFromSlashArgument("commands")).toBe("shortcuts");
     expect(settingsSectionFromSlashArgument("keybindings")).toBe("shortcuts");
     expect(settingsSectionFromSlashArgument("marketplace")).toBe("marketplace");
     expect(settingsSectionFromSlashArgument("packages")).toBe("marketplace");
+    expect(settingsSectionFromSlashArgument("mcp")).toBe("mcp");
     expect(settingsSectionFromSlashArgument("plugins")).toBe("plugins");
+    expect(settingsSectionFromSlashArgument("providers")).toBe("providers");
+    expect(settingsSectionFromSlashArgument("skills-catalog")).toBe("skills-catalog");
     expect(settingsSectionFromSlashArgument("unknown")).toBeUndefined();
   });
 });

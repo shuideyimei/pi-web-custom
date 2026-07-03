@@ -798,7 +798,7 @@ export class PiWebApp extends LitElement {
     this.git.updatePolling();
   }
 
-  private openSettings(section: SettingsSection = "general"): void {
+  private openSettings(section: SettingsSection = "appearance"): void {
     this.settingsSection = section;
     writeSettingsSection(section);
   }
@@ -1913,13 +1913,14 @@ export class PiWebApp extends LitElement {
   }
 
   private runSettingsSlashCommand(args: string[]): void {
+    const usage = "Usage: /settings [appearance|chat|notifications|sessions|snippets|agents|behavior|commands|mcp|plugins|providers|usage|skills|skills-catalog]";
     if (args.length > 1) {
-      this.setState({ error: "Usage: /settings [general|sessiond|marketplace|plugins|shortcuts]" });
+      this.setState({ error: usage });
       return;
     }
     const section = settingsSectionFromSlashArgument(args[0]);
     if (section === undefined) {
-      this.setState({ error: "Usage: /settings [general|sessiond|marketplace|plugins|shortcuts]" });
+      this.setState({ error: usage });
       return;
     }
     this.openSettings(section);
@@ -2016,7 +2017,7 @@ export class PiWebApp extends LitElement {
         ${state.projectDialogOpen ? html`<project-dialog .machineId=${selectedMachineId(state)} .onSubmit=${(path: string, create: boolean) => this.projects.addProject(path, create)} .onCancel=${() => { this.setState({ projectDialogOpen: false }); }}></project-dialog>` : null}
         ${state.machineDialogOpen ? html`<machine-dialog .error=${state.error} .onSubmit=${(input: MachineDialogSubmit) => this.submitMachineDialog(input)} .onCancel=${() => { this.setState({ machineDialogOpen: false }); }}></machine-dialog>` : null}
         ${state.themeDialog !== undefined ? html`<command-picker title=${state.themeDialog.title} .options=${state.themeDialog.options} .selectedValue=${state.themeDialog.selectedValue} .onPick=${(value: string) => { this.pickTheme(value); }} .onCancel=${() => { this.setState({ themeDialog: undefined }); }}></command-picker>` : null}
-        ${this.settingsSection !== undefined ? html`<settings-dialog .section=${this.settingsSection} .actions=${this.getDefaultActions()} .projectCwd=${selectedMachineId(this.state) === "local" ? this.state.selectedWorkspace?.path : undefined} .onNavigate=${(section: SettingsSection) => { this.navigateSettings(section); }} .onClose=${() => { this.closeSettings(); }} .onConfigSaved=${(config: PiWebConfigValues) => { this.applyClientConfig(config); }}></settings-dialog>` : null}
+        ${this.settingsSection !== undefined ? html`<settings-dialog .section=${this.settingsSection} .actions=${this.getDefaultActions()} .projectCwd=${selectedMachineId(this.state) === "local" ? this.state.selectedWorkspace?.path : undefined} .onNavigate=${(section: SettingsSection) => { this.navigateSettings(section); }} .onClose=${() => { this.closeSettings(); }} .onConfigSaved=${(config: PiWebConfigValues) => { this.applyClientConfig(config); }} .onOpenThemePicker=${() => { this.closeSettings(); this.openThemeDialog(); }} .onConfigureAuth=${() => { this.closeSettings(); void this.auth.openLogin(); }} .onLogoutAuth=${() => { this.closeSettings(); void this.auth.openLogout(); }} .onOpenUsageDashboard=${() => { this.closeSettings(); this.selectMainView("home"); }}></settings-dialog>` : null}
         <toast-container .toasts=${state.toasts}></toast-container>
       </div>
     `;

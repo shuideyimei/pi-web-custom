@@ -1,5 +1,6 @@
 import type { SlashCommand } from "./api";
 import type { SettingsSection } from "./settingsRoute";
+import { parseSettingsSection } from "./settingsRoute";
 
 export interface ParsedSlashCommandInput {
   raw: string;
@@ -48,9 +49,6 @@ export function slashCommandArguments(args: string): string[] {
 }
 
 export function settingsSectionFromSlashArgument(value: string | undefined): SettingsSection | undefined {
-  if (value === undefined || value === "" || value === "general") return "general";
-  if (value === "sessiond" || value === "marketplace" || value === "plugins" || value === "shortcuts") return value;
-  if (value === "market" || value === "packages" || value === "install") return "marketplace";
-  if (value === "hotkeys" || value === "keybindings" || value === "keys") return "shortcuts";
-  return undefined;
+  if (value === undefined || value === "") return "appearance";
+  return parseSettingsSection(value);
 }
