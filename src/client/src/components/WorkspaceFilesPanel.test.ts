@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceUploadBatchState } from "../workspaceUploadState";
-import { startDirectWorkspaceUpload, uploadBatchProgressValue, uploadBatchStatusLabel, workspaceUploadBatchesForScope, workspaceUploadReviewDefaults, workspaceUploadReviewError } from "./WorkspaceFilesPanel";
+import { startDirectWorkspaceUpload, uploadBatchProgressValue, uploadBatchStatusLabel, workspaceFileAbsolutePath, workspaceUploadBatchesForScope, workspaceUploadReviewDefaults, workspaceUploadReviewError } from "./WorkspaceFilesPanel";
+
+describe("workspaceFileAbsolutePath", () => {
+  it("resolves workspace-relative file paths for copy path actions", () => {
+    expect(workspaceFileAbsolutePath("/repo", "src/main.ts")).toBe("/repo/src/main.ts");
+    expect(workspaceFileAbsolutePath("/repo/", "src/main.ts")).toBe("/repo/src/main.ts");
+    expect(workspaceFileAbsolutePath("C:\\repo", "src/main.ts")).toBe("C:\\repo\\src\\main.ts");
+  });
+
+  it("preserves already absolute tree paths", () => {
+    expect(workspaceFileAbsolutePath("/repo", "/external/file.txt")).toBe("/external/file.txt");
+    expect(workspaceFileAbsolutePath("C:\\repo", "D:\\external\\file.txt")).toBe("D:\\external\\file.txt");
+  });
+});
 
 describe("workspaceUploadBatchesForScope", () => {
   it("filters upload batches to the selected project, workspace, and machine", () => {

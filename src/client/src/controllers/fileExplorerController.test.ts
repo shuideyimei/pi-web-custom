@@ -48,6 +48,36 @@ const workspace: Workspace = {
   isGitWorktree: false,
 };
 
+describe("FileExplorerController file actions", () => {
+  it("renames the selected file, refreshes the tree, and selects the renamed path", async () => {
+    const harness = createHarness();
+    await harness.controller.selectFile("src/old.ts");
+    harness.updateUrl.mockClear();
+
+    await harness.controller.moveFile("src/old.ts", "src/new.ts", { overwrite: false });
+
+    expect(harness.api.moveWorkspaceFile).toHaveBeenCalledWith("project-1", "workspace-1", "src/old.ts", "src/new.ts", { overwrite: false }, "remote-1");
+    expect(harness.api.workspaceTree).toHaveBeenCalledWith("project-1", "workspace-1", "", "remote-1");
+    expect(harness.api.workspaceFile).toHaveBeenCalledWith("project-1", "workspace-1", "src/new.ts", "remote-1");
+    expect(harness.state.selectedFilePath).toBe("src/new.ts");
+    expect(harness.updateUrl).toHaveBeenCalledWith({ replace: true });
+  });
+
+  it("deletes the selected file, refreshes the tree, and clears the file route", async () => {
+    const harness = createHarness();
+    await harness.controller.selectFile("src/delete.ts");
+    harness.updateUrl.mockClear();
+
+    await harness.controller.deleteFile("src/delete.ts");
+
+    expect(harness.api.deleteWorkspaceFile).toHaveBeenCalledWith("project-1", "workspace-1", "src/delete.ts", "remote-1");
+    expect(harness.api.workspaceTree).toHaveBeenCalledWith("project-1", "workspace-1", "", "remote-1");
+    expect(harness.state.selectedFilePath).toBeUndefined();
+    expect(harness.state.selectedFileContent).toBeUndefined();
+    expect(harness.updateUrl).toHaveBeenCalledWith({ replace: true });
+  });
+});
+
 describe("FileExplorerController workspace uploads", () => {
   it("tracks upload progress, completes from final responses, refreshes files, and selects the first uploaded file", async () => {
     const upload = controllableUpload();
@@ -222,6 +252,8 @@ function createHarness(deps: FileExplorerControllerDependencies = {}) {
   const api: NonNullable<FileExplorerControllerDependencies["api"]> = deps.api ?? {
     workspaceTree: vi.fn<NonNullable<FileExplorerControllerDependencies["api"]>["workspaceTree"]>((_projectId, _workspaceId, path = "") => Promise.resolve(treeResponse(path))),
     workspaceFile: vi.fn<NonNullable<FileExplorerControllerDependencies["api"]>["workspaceFile"]>((_projectId, _workspaceId, path) => Promise.resolve(fileResponse(path))),
+    deleteWorkspaceFile: vi.fn<NonNullable<FileExplorerControllerDependencies["api"]>["deleteWorkspaceFile"]>((_projectId, _workspaceId, path) => Promise.resolve({ path, existed: true })),
+    moveWorkspaceFile: vi.fn<NonNullable<FileExplorerControllerDependencies["api"]>["moveWorkspaceFile"]>((_projectId, _workspaceId, fromPath, toPath) => Promise.resolve({ fromPath, toPath, size: 2, modifiedAt: "2026-06-25T00:00:00.000Z" })),
   };
   const updateUrl = vi.fn();
   let batchSequence = 0;

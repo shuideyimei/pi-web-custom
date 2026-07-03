@@ -55,7 +55,7 @@ function renderSummary(context: WorkspacePanelContext): TemplateResult {
 }
 
 function renderFiles(context: WorkspacePanelContext): TemplateResult {
-  return html`<workspace-files-panel .context=${context}></workspace-files-panel>`;
+  return html`<workspace-files-panel variant="sidebar-split" .context=${context}></workspace-files-panel>`;
 }
 
 function renderTerminal(context: WorkspacePanelContext): TemplateResult {

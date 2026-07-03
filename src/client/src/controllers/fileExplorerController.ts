@@ -3,6 +3,9 @@ import {
   uploadWorkspaceFiles as defaultUploadWorkspaceFiles,
   WorkspaceUploadBatchError,
   WorkspaceUploadCancelledError,
+  type DeleteWorkspaceFileResponse,
+  type MoveWorkspaceFileOptions,
+  type MoveWorkspaceFileResponse,
   type WorkspaceUploadBatchProgress,
   type WorkspaceUploadTask,
   type WriteWorkspaceFileResponse,
@@ -20,7 +23,7 @@ import { selectedMachineId, type GetState, type SetState, type UpdateUrl } from 
 
 const FILES_ROUTE_NAMESPACE = queryNamespace("core:workspace.files");
 
-type FileExplorerApi = Pick<typeof defaultApi, "workspaceFile" | "workspaceTree">;
+type FileExplorerApi = Pick<typeof defaultApi, "workspaceFile" | "workspaceTree" | "deleteWorkspaceFile" | "moveWorkspaceFile">;
 type UploadWorkspaceFiles = typeof defaultUploadWorkspaceFiles;
 
 export interface FileExplorerControllerDependencies {
@@ -97,7 +100,7 @@ export class FileExplorerController {
   }
 
   async selectFile(path: string): Promise<void> {
-    this.setState({ selectedFilePath: path, selectedFileContent: undefined, workspaceTool: "core:workspace.files", mainView: this.getState().mainView === "chat" ? "chat" : "core:workspace.files" });
+    this.setState({ selectedFilePath: path, selectedFileContent: undefined, workspaceTool: "core:workspace.files", mainView: "core:workspace.files" });
     setNamespacedQueryKey(FILES_ROUTE_NAMESPACE, "file", path);
     this.updateUrl({ replace: true });
     await this.restoreFile(path);
@@ -114,13 +117,49 @@ export class FileExplorerController {
     } catch (error) {
       if (this.getState().selectedFilePath !== path) return;
       if (isUnavailableFileError(error)) {
-        this.setState({ selectedFilePath: undefined, selectedFileContent: undefined, error: "" });
-        setNamespacedQueryKey(FILES_ROUTE_NAMESPACE, "file", undefined, { replace: true });
-        this.updateUrl({ replace: true });
+        this.clearSelectedFile();
         return;
       }
       this.setState({ error: String(error) });
     }
+  }
+
+  async deleteFile(path: string): Promise<DeleteWorkspaceFileResponse | undefined> {
+    const project = this.getState().selectedProject;
+    const workspace = this.getState().selectedWorkspace;
+    if (project === undefined || workspace === undefined) return undefined;
+    try {
+      const result = await this.api.deleteWorkspaceFile(project.id, workspace.id, path, selectedMachineId(this.getState()));
+      if (this.getState().selectedFilePath === path) this.clearSelectedFile();
+      else this.setState({ error: "" });
+      await this.refreshFiles();
+      return result;
+    } catch (error) {
+      this.setState({ error: String(error) });
+      return undefined;
+    }
+  }
+
+  async moveFile(fromPath: string, toPath: string, options?: MoveWorkspaceFileOptions): Promise<MoveWorkspaceFileResponse | undefined> {
+    const project = this.getState().selectedProject;
+    const workspace = this.getState().selectedWorkspace;
+    if (project === undefined || workspace === undefined) return undefined;
+    try {
+      const result = await this.api.moveWorkspaceFile(project.id, workspace.id, fromPath, toPath, options, selectedMachineId(this.getState()));
+      this.setState({ error: "" });
+      await this.refreshFiles();
+      if (this.getState().selectedFilePath === fromPath) await this.selectFile(result.toPath);
+      return result;
+    } catch (error) {
+      this.setState({ error: String(error) });
+      return undefined;
+    }
+  }
+
+  private clearSelectedFile(): void {
+    this.setState({ selectedFilePath: undefined, selectedFileContent: undefined, error: "" });
+    setNamespacedQueryKey(FILES_ROUTE_NAMESPACE, "file", undefined, { replace: true });
+    this.updateUrl({ replace: true });
   }
 
   startWorkspaceUpload(files: readonly File[], options: StartWorkspaceUploadOptions): WorkspaceUploadRun | undefined {

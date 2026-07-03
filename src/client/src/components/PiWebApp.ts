@@ -58,6 +58,7 @@ import "./InputRequestDialog";
 import type { MachineDialogSubmit } from "./MachineDialog";
 import "./SettingsDialog";
 import "./WorkspacePanel";
+import "./WorkspaceFilesPanel";
 import "./ToastContainer";
 import "./ExtensionOverlay";
 import type { WorkspacePanelEmptyState } from "./WorkspacePanel";
@@ -720,6 +721,7 @@ export class PiWebApp extends LitElement {
 
   private openWorkspaceTool(tool: QualifiedContributionId) {
     if (tool === "core:workspace.terminal") this.terminalAutoStartWorkspaceId = this.state.selectedWorkspace?.id;
+    if (tool === "core:workspace.files") this.panelCollapse.expandWorkspacePanel();
     this.setState({ workspaceTool: tool, mainView: tool });
     this.updateUrl();
     this.refreshSelectedWorkspaceTool(tool);
@@ -959,8 +961,16 @@ export class PiWebApp extends LitElement {
         .tool=${this.state.workspaceTool}
         .panels=${this.visibleWorkspacePanels()}
         .onSelectTool=${(tool: QualifiedContributionId) => { this.openWorkspaceTool(tool); }}
+        .onCloseLastTool=${() => { this.closeWorkspacePanelTools(); }}
+        .onOpenSettings=${() => { this.openSettings(); }}
       ></workspace-panel>
     `;
+  }
+
+  private closeWorkspacePanelTools(): void {
+    this.panelCollapse.collapseWorkspacePanel();
+    this.setState({ mainView: this.state.selectedSession === undefined ? "home" : "chat" });
+    this.updateUrl({ replace: true });
   }
 
   private renderNavigationPanelEdgeControl() {
@@ -992,10 +1002,11 @@ export class PiWebApp extends LitElement {
       <app-panel-edge-control
         side="workspace"
         controls="workspace-panel"
-        resizeLabel="Resize workspace panel"
-        expandLabel="Expand workspace panel"
-        collapseLabel="Collapse workspace panel"
+        resizeLabel="Resize workspace sidebar"
+        expandLabel="Expand workspace sidebar"
+        collapseLabel="Collapse workspace sidebar"
         .collapsed=${this.panelCollapse.workspacePanelCollapsed}
+        .showToggle=${false}
         .resizable=${!this.appShell.isMobileNavigationLayout}
         .panelWidth=${this.panelResize.panelWidth("workspace")}
         .minWidth=${constraints.minWidth}
@@ -1006,6 +1017,27 @@ export class PiWebApp extends LitElement {
         .onResizeEnd=${() => { this.panelResize.persistPanelSizes(); }}
         .onReset=${() => { this.resetResizablePanel("workspace"); }}
       ></app-panel-edge-control>
+    `;
+  }
+
+  private renderWorkspaceSidebarToggle() {
+    const collapsed = this.panelCollapse.workspacePanelCollapsed;
+    const label = collapsed ? "Open right sidebar" : "Close right sidebar";
+    return html`
+      <button
+        class=${`workspace-sidebar-toggle ${collapsed ? "collapsed" : ""}`}
+        type="button"
+        title=${label}
+        aria-label=${label}
+        aria-controls="workspace-panel"
+        aria-expanded=${String(!collapsed)}
+        @click=${() => { this.panelCollapse.toggleWorkspacePanel(); }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="4" y="5" width="16" height="14" rx="3"></rect>
+          <path d="M15 5v14"></path>
+        </svg>
+      </button>
     `;
   }
 
@@ -1339,7 +1371,9 @@ export class PiWebApp extends LitElement {
         workspaceUploadDefaultFolder: workspaceEffectiveUploadFolder(workspace.effectiveConfig, this.workspaceUploadDefaultFolder),
         onRefreshFiles: () => { void this.files.refreshFiles(); },
         onExpandDir: (path: string) => { void this.files.expandDir(path); },
-        onSelectFile: (path: string) => { void this.files.selectFile(path); },
+        onSelectFile: (path: string) => { this.panelCollapse.expandWorkspacePanel(); void this.files.selectFile(path); },
+        onRenameFile: (fromPath: string, toPath: string) => { void this.files.moveFile(fromPath, toPath, { createDirs: false, overwrite: false }); },
+        onDeleteFile: (path: string) => { void this.files.deleteFile(path); },
         onStartWorkspaceUpload: (files, options) => this.files.startWorkspaceUpload(files, options),
         onCancelWorkspaceUpload: (batchId) => { this.files.cancelWorkspaceUpload(batchId); },
         onClearWorkspaceUpload: (batchId) => { this.files.clearWorkspaceUpload(batchId); },
@@ -2001,7 +2035,7 @@ export class PiWebApp extends LitElement {
           ${state.error ? html`<div class="error">${state.error}</div>` : null}
           <div class="mobile-navigation-panel">${this.appShell.isMobileNavigationLayout ? this.renderNavigationPanel() : null}</div>
           ${state.mainView === "home" ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading} .onStartSession=${state.selectedWorkspace !== undefined ? () => { void this.sessions.startSession(); } : undefined}></token-usage-dashboard>` : state.selectedSession ? html`
-            ${this.shouldShowSessionUsageDashboard(state) ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading}></token-usage-dashboard>` : html`<chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .workspacePath=${state.selectedWorkspace?.path} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string) => { void this.git.selectDiff(path); }}></chat-view>`}
+            ${this.shouldShowSessionUsageDashboard(state) ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading}></token-usage-dashboard>` : html`<chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .workspacePath=${state.selectedWorkspace?.path} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { this.panelCollapse.expandWorkspacePanel(); void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string) => { this.panelCollapse.expandWorkspacePanel(); void this.git.selectDiff(path); }}></chat-view>`}
             <prompt-editor .sessionId=${state.selectedSession.id} .cwd=${state.selectedWorkspace?.path} .machineId=${selectedMachineId(state)} .projectId=${state.selectedWorkspace?.projectId} .workspaceId=${state.selectedWorkspace?.id} .workspaceScopedFileSuggestions=${this.supportsWorkspaceFileSuggestions()} .disabled=${state.selectedSession.archived === true} .canSteer=${state.status?.isStreaming === true} .isCompacting=${state.status?.isCompacting === true} .canStop=${canStopSession} .status=${state.status} .availableThinkingLevels=${state.availableThinkingLevels} .sending=${state.sendingPrompts[state.selectedSession.id] === true} .onSend=${(text: string, streamingBehavior?: "steer" | "followUp", attachments?: import("../api").PromptAttachment[], delivery?: import("../../../shared/apiTypes").PromptAttachmentDelivery) => { this.sendPrompt(text, streamingBehavior, attachments, delivery); }} .onStop=${() => this.sessions.stopActiveWork()} .onSelectModel=${() => { void this.openModelDialog(); }} .onSelectThinking=${() => { void this.openThinkingDialog(); }}></prompt-editor>
             ${state.commandDialog !== undefined ? html`<command-picker .title=${state.commandDialog.title} .options=${state.commandDialog.options} .onPick=${(value: string) => this.sessions.respondToCommand(state.commandDialog?.requestId ?? "", value)} .onCancel=${() => { this.sessions.cancelCommand(); }}></command-picker>` : null}
             ${state.modelDialog !== undefined ? html`<command-picker title=${state.modelDialog.title} .searchable=${true} .options=${state.modelDialog.options} .selectedValue=${state.modelDialog.selectedValue} .onPick=${(value: string) => { void this.pickModel(value); }} .onCancel=${() => { this.setState({ modelDialog: undefined }); }}></command-picker>` : null}
@@ -2012,6 +2046,7 @@ export class PiWebApp extends LitElement {
           ` : html`<div class="empty">${this.sessionEmptyMessage()}</div>`}
         </main>
         ${this.renderWorkspacePanelEdgeControl()}
+        ${this.renderWorkspaceSidebarToggle()}
         ${this.renderWorkspacePanel()}
         ${state.actionPaletteOpen ? html`<action-palette .actions=${this.getActions()} .onRun=${(action: AppAction) => { this.setState({ actionPaletteOpen: false }); this.runAction(action); }} .onCancel=${() => { this.setState({ actionPaletteOpen: false }); }}></action-palette>` : null}
         ${state.projectDialogOpen ? html`<project-dialog .machineId=${selectedMachineId(state)} .onSubmit=${(path: string, create: boolean) => this.projects.addProject(path, create)} .onCancel=${() => { this.setState({ projectDialogOpen: false }); }}></project-dialog>` : null}

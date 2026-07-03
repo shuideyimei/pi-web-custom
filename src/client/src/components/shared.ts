@@ -74,7 +74,7 @@ export const appStyles = css`
   @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
     :host { --pi-app-safe-area-bottom: env(safe-area-inset-bottom); }
   }
-  .shell { --navigation-panel-size: 300px; --workspace-panel-size: minmax(360px, 42vw); --navigation-panel-width: var(--navigation-panel-size); --workspace-panel-width: var(--workspace-panel-size); position: relative; z-index: 1; display: grid; grid-template-columns: var(--navigation-panel-width) 1px minmax(320px, 1fr) 1px var(--workspace-panel-width); grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; }
+  .shell { --navigation-panel-size: 300px; --workspace-panel-size: 480px; --navigation-panel-width: var(--navigation-panel-size); --workspace-panel-width: var(--workspace-panel-size); --panel-layout-transition-duration: .46s; --panel-layout-transition-easing: cubic-bezier(.16, 1, .3, 1); position: relative; z-index: 1; display: grid; grid-template-columns: var(--navigation-panel-width) 1px minmax(320px, 1fr) 1px var(--workspace-panel-width); grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; overflow: hidden; transition: grid-template-columns var(--panel-layout-transition-duration) var(--panel-layout-transition-easing); }
   aside { grid-column: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--pi-panel-bg); backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05); -webkit-backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05); border-right: 1px solid var(--pi-panel-border); box-shadow: inset 1px 0 0 0 var(--pi-inset-highlight); }
   aside app-navigation-panel { flex: 1 1 auto; min-height: 0; background: transparent; }
   header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; border-bottom: 1px solid var(--pi-border); }
@@ -118,12 +118,16 @@ export const appStyles = css`
   .shell.navigation-panel-collapsed .navigation-panel-edge-button { transform: translateX(calc(50% - .5px)); }
   .shell.workspace-panel-collapsed .workspace-panel-edge-button { transform: translateX(calc(-50% + .5px)); }
   .navigation-panel-edge-icon, .workspace-panel-edge-icon { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-  workspace-panel { grid-column: 5; min-width: 0; min-height: 0; overflow: hidden; }
+  workspace-panel { grid-column: 5; min-width: 0; min-height: 0; overflow: hidden; transition: opacity .34s ease, transform var(--panel-layout-transition-duration) var(--panel-layout-transition-easing), visibility .34s ease; }
+  .workspace-sidebar-toggle { position: absolute; top: 10px; right: 10px; z-index: 6; display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--pi-border-muted); border-radius: 14px; background: color-mix(in srgb, var(--pi-surface) 88%, transparent); color: var(--pi-text); box-shadow: 0 8px 24px var(--pi-shadow-soft); backdrop-filter: var(--pi-glass-blur); -webkit-backdrop-filter: var(--pi-glass-blur); transition: background .16s ease, border-color .16s ease, transform var(--panel-layout-transition-duration) var(--panel-layout-transition-easing), right var(--panel-layout-transition-duration) var(--panel-layout-transition-easing); }
+  .workspace-sidebar-toggle:hover, .workspace-sidebar-toggle:focus-visible { border-color: color-mix(in srgb, var(--pi-text) 24%, var(--pi-border-muted)); background: var(--pi-surface-hover); }
+  .workspace-sidebar-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   @media (min-width: 1181px) {
     .shell.navigation-panel-collapsed { --navigation-panel-width: 0px; }
     .shell.navigation-panel-collapsed > aside { display: none; }
     .shell.workspace-panel-collapsed { --workspace-panel-width: 0px; }
-    .shell.workspace-panel-collapsed > workspace-panel { display: none; }
+    .shell.workspace-panel-collapsed > workspace-panel { opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(20px); }
+    .shell.workspace-panel-collapsed .workspace-sidebar-toggle { right: 12px; }
   }
   @media (max-width: 1180px) {
     .shell { grid-template-columns: var(--navigation-panel-width) 1px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
@@ -137,7 +141,7 @@ export const appStyles = css`
     .shell.workspace-view main { grid-row: 1; min-height: auto; }
     .shell.workspace-view > workspace-panel { grid-column: 3; grid-row: 2; display: flex; border-left: 0; }
     .shell:not(.workspace-view) > workspace-panel { display: none; }
-    .workspace-panel-edge { display: none; }
+    .workspace-panel-edge, .workspace-sidebar-toggle { display: none; }
     main.workspace-view chat-view, main.workspace-view prompt-editor,
     main.workspace-view .empty { display: none; }
     main.workspace-view { overflow: hidden; }
@@ -168,22 +172,36 @@ export const appStyles = css`
 `;
 
 export const workspacePanelStyles = css`
-  :host { display: flex; flex-direction: column; min-height: 0; color: var(--pi-text); background: var(--pi-panel-bg); backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05); -webkit-backdrop-filter: blur(34px) saturate(190%) contrast(105%) brightness(1.05); border-left: 1px solid var(--pi-panel-border); box-shadow: inset -1px 0 0 0 var(--pi-inset-highlight); font: 13px system-ui, sans-serif; container-type: inline-size; }
-  header { flex: 0 0 auto; min-width: 0; border-bottom: 1px solid var(--pi-glass-border); background: transparent; }
+  :host { display: flex; flex-direction: column; min-height: 0; color: var(--pi-text); background: color-mix(in srgb, var(--pi-panel-bg) 92%, var(--pi-main-bg) 8%); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); border-left: 1px solid var(--pi-panel-border); box-shadow: inset 1px 0 0 0 var(--pi-inset-highlight); font: 13px system-ui, sans-serif; container-type: inline-size; }
+  header { flex: 0 0 auto; min-width: 0; border-bottom: 1px solid var(--pi-border-muted); background: color-mix(in srgb, var(--pi-bg) 48%, transparent); }
   .workspace-header-scroll-frame { position: relative; min-width: 0; background: transparent; }
   .workspace-header-scroll-frame::before, .workspace-header-scroll-frame::after { content: ""; position: absolute; top: 0; bottom: 0; z-index: 2; width: 18px; opacity: 0; pointer-events: none; transition: opacity .15s ease; }
   .workspace-header-scroll-frame::before { left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--pi-shadow-strong) 55%, transparent) 0%, transparent 100%); }
   .workspace-header-scroll-frame::after { right: 0; background: linear-gradient(270deg, color-mix(in srgb, var(--pi-shadow-strong) 55%, transparent) 0%, transparent 100%); }
   .workspace-header-scroll-frame.can-scroll-left::before, .workspace-header-scroll-frame.can-scroll-right::after { opacity: 1; }
-  .workspace-header-strip { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; padding: 8px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
-  .tabs { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; }
-  .tabs button { flex: 0 0 auto; white-space: nowrap; }
-  .tabs button.icon-tab { min-width: 34px; }
-  button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--pi-glass-border); border-radius: 7px; background: var(--pi-glass-bg); color: var(--pi-text); padding: 5px 7px; cursor: pointer; }
-  button.selected { border-color: color-mix(in srgb, var(--pi-text) 20%, transparent); background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
-  .tab-icon { flex: 0 0 auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-  .tab-custom-icon { flex: 0 0 auto; width: 16px; height: 16px; display: inline-grid; place-items: center; color: currentColor; pointer-events: none; }
-  .tab-custom-icon svg { width: 16px; height: 16px; pointer-events: none; }
+  .workspace-header-strip { display: flex; justify-content: flex-start; align-items: center; gap: 8px; min-width: 0; padding: 10px; overflow: visible; }
+  .tool-picker { position: relative; min-width: 0; display: flex; align-items: center; gap: 7px; }
+  .opened-tools { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+  button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--pi-border-muted); border-radius: 10px; background: color-mix(in srgb, var(--pi-surface) 82%, transparent); color: var(--pi-text); padding: 6px 8px; cursor: pointer; }
+  button:hover, button:focus-visible { background: var(--pi-surface-hover); }
+  button.selected { background: color-mix(in srgb, var(--pi-text) 12%, transparent); color: var(--pi-text-bright); }
+  .opened-tool { box-sizing: border-box; max-width: 170px; min-height: 34px; display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--pi-border-muted); border-radius: 13px; background: color-mix(in srgb, var(--pi-surface) 88%, transparent); color: var(--pi-text); overflow: hidden; }
+  .opened-tool.selected { background: color-mix(in srgb, var(--pi-text) 12%, transparent); color: var(--pi-text-bright); font-weight: 650; }
+  .opened-tool-main { min-width: 0; min-height: 32px; flex: 1 1 auto; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 12px; background: transparent; color: inherit; padding: 0 6px 0 10px; font: inherit; }
+  .opened-tool-main:hover, .opened-tool-main:focus-visible { background: color-mix(in srgb, var(--pi-text) 8%, transparent); }
+  .opened-tool-close { flex: 0 0 auto; width: 24px; height: 24px; display: inline-grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--pi-muted); padding: 0; }
+  .opened-tool-close:hover, .opened-tool-close:focus-visible { background: color-mix(in srgb, var(--pi-text) 10%, transparent); color: var(--pi-text-bright); }
+  .opened-tool-close svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+  .opened-tool .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .add-tool { flex: 0 0 auto; width: 36px; height: 36px; justify-content: center; padding: 0; border-radius: 13px; background: color-mix(in srgb, var(--pi-surface) 88%, transparent); }
+  .add-tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .tool-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: min(300px, calc(100vw - 32px)); display: grid; gap: 2px; border: 1px solid var(--pi-elevated-border); border-radius: 18px; background: color-mix(in srgb, var(--pi-elevated-bg) 94%, transparent); box-shadow: 0 18px 50px var(--pi-shadow); padding: 8px; }
+  .tool-menu button { width: 100%; min-height: 38px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 9px; align-items: center; border-color: transparent; background: transparent; border-radius: 12px; text-align: left; }
+  .tool-menu button:hover, .tool-menu button:focus-visible, .tool-menu button.selected { background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
+  .tool-shortcut { color: var(--pi-muted); font-size: 12px; justify-self: end; }
+  .tab-icon { flex: 0 0 auto; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .tab-custom-icon { flex: 0 0 auto; width: 14px; height: 14px; display: inline-grid; place-items: center; color: currentColor; pointer-events: none; }
+  .tab-custom-icon svg { width: 14px; height: 14px; pointer-events: none; }
   .tab-label { min-width: 0; }
   .tab-badge { flex: 0 0 auto; display: inline-block; min-width: 14px; border: 1px solid var(--pi-success-border); border-radius: 999px; background: var(--pi-success-surface); color: var(--pi-success); padding: 0 5px; font-size: 11px; line-height: 16px; text-align: center; }
   @container (max-width: 430px) {

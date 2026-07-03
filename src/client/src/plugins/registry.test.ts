@@ -624,6 +624,8 @@ function createWorkspacePanelContext(machineId: string, prompt: WorkspacePanelCo
     onRefreshFiles: vi.fn(),
     onExpandDir: vi.fn(),
     onSelectFile: vi.fn(),
+    onRenameFile: vi.fn(),
+    onDeleteFile: vi.fn(),
     onStartWorkspaceUpload: vi.fn(),
     onCancelWorkspaceUpload: vi.fn(),
     onClearWorkspaceUpload: vi.fn(),

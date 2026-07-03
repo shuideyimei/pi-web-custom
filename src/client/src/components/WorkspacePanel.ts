@@ -3,6 +3,7 @@ import { customElement, property, query, state } from "lit/decorators.js";
 import type { Workspace } from "../api";
 import type { QualifiedContributionId, QualifiedWorkspacePanelContribution, WorkspacePanelContext } from "../plugins/types";
 import { workspacePanelStyles } from "./shared";
+import { renderBuiltinTabIcon } from "./tabIcons";
 
 export interface WorkspacePanelEmptyState {
   title: string;
@@ -20,7 +21,11 @@ export class WorkspacePanel extends LitElement {
   @property({ attribute: false }) panels: QualifiedWorkspacePanelContribution[] = [];
   @property({ type: Boolean }) hideToolTabs = false;
   @property({ attribute: false }) onSelectTool: (tool: QualifiedContributionId) => void = () => undefined;
+  @property({ attribute: false }) onCloseLastTool?: () => void;
+  @property({ attribute: false }) onOpenSettings?: () => void;
   @query(".workspace-header-strip") private workspaceHeaderStrip?: HTMLElement | null;
+  @state() private toolMenuOpen = false;
+  @state() private openedToolIds: QualifiedContributionId[] = [];
   @state() private workspaceHeaderCanScrollLeft = false;
   @state() private workspaceHeaderCanScrollRight = false;
 
@@ -49,54 +54,152 @@ export class WorkspacePanel extends LitElement {
 
   override render() {
     const workspace = this.workspace;
+    const context = this.panelContext;
+    const visiblePanels = workspace === undefined || context === undefined ? [] : this.panels;
+    const selectedPanel = visiblePanels.find((panel) => panel.id === this.tool) ?? visiblePanels[0];
+    return html`
+      ${this.hideToolTabs ? null : this.renderHeader(visiblePanels, selectedPanel, context)}
+      ${this.renderContent(workspace, context, selectedPanel)}
+    `;
+  }
+
+  private renderHeader(visiblePanels: QualifiedWorkspacePanelContribution[], selectedPanel: QualifiedWorkspacePanelContribution | undefined, context: WorkspacePanelContext | undefined): TemplateResult {
+    const openedPanels = this.openedPanels(visiblePanels, selectedPanel);
+    return html`
+      <header @keydown=${(event: KeyboardEvent) => { this.onHeaderKeyDown(event); }}>
+        <div class=${this.workspaceHeaderFrameClass()}>
+          <div class="workspace-header-strip" @scroll=${this.onWorkspaceHeaderScroll}>
+            <div class="tool-picker">
+              <div class="opened-tools" aria-label="Opened workspace tools">
+                ${openedPanels.map((panel) => {
+                  const selected = selectedPanel?.id === panel.id;
+                  const badge = context === undefined ? undefined : panel.badge?.(context);
+                  const ariaLabel = this.panelTabAriaLabel(panel, badge);
+                  const canClose = openedPanels.length > 0;
+                  return html`
+                    <span class=${selected ? "opened-tool selected" : "opened-tool"}>
+                      <button type="button" class="opened-tool-main" title=${ariaLabel} aria-label=${ariaLabel} aria-pressed=${String(selected)} @click=${() => { this.selectOpenedTool(panel.id); }}>
+                        ${this.renderPanelTabContent(panel, badge)}
+                      </button>
+                      ${canClose ? html`
+                        <button type="button" class="opened-tool-close" title=${`Close ${panel.title}`} aria-label=${`Close ${panel.title}`} @click=${(event: MouseEvent) => { this.closeOpenedTool(event, panel.id, openedPanels, visiblePanels, selectedPanel); }}>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+                        </button>
+                      ` : null}
+                    </span>
+                  `;
+                })}
+              </div>
+              <button type="button" class="add-tool" title="Open workspace tool menu" aria-label="Open workspace tool menu" aria-haspopup="menu" aria-expanded=${String(this.toolMenuOpen)} @click=${() => { this.toolMenuOpen = !this.toolMenuOpen; }}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+              </button>
+              ${this.toolMenuOpen ? this.renderToolMenu(visiblePanels, selectedPanel, context) : null}
+            </div>
+          </div>
+        </div>
+      </header>
+    `;
+  }
+
+  private renderToolMenu(visiblePanels: QualifiedWorkspacePanelContribution[], selectedPanel: QualifiedWorkspacePanelContribution | undefined, context: WorkspacePanelContext | undefined): TemplateResult {
+    return html`
+      <div class="tool-menu" role="menu" aria-label="Workspace tools">
+        ${visiblePanels.map((panel) => {
+          const selected = selectedPanel?.id === panel.id;
+          const badge = context === undefined ? undefined : panel.badge?.(context);
+          const ariaLabel = this.panelTabAriaLabel(panel, badge);
+          return html`
+            <button class=${selected ? "selected" : ""} role="menuitemradio" aria-checked=${String(selected)} title=${ariaLabel} @click=${() => { this.selectToolFromMenu(panel.id, selectedPanel?.id); }}>
+              ${this.renderPanelTabContent(panel, badge)}
+              ${this.renderPanelShortcut(panel.id)}
+            </button>
+          `;
+        })}
+        ${this.onOpenSettings === undefined ? null : html`
+          <button role="menuitem" title="Settings" @click=${() => { this.openSettingsFromMenu(); }}>
+            ${renderBuiltinTabIcon("settings")}
+            <span class="tab-label">Settings</span>
+            <span class="tool-shortcut">⌘,</span>
+          </button>
+        `}
+      </div>
+    `;
+  }
+
+  private renderContent(workspace: Workspace | undefined, context: WorkspacePanelContext | undefined, selectedPanel: QualifiedWorkspacePanelContribution | undefined): TemplateResult {
     if (workspace === undefined) return this.renderEmptyState(this.emptyState ?? {
       title: "Select a workspace",
       body: "Choose a workspace to inspect files, Git, or terminals.",
     });
-    const context = this.panelContext;
     if (context === undefined) return this.renderEmptyState({
       title: "Workspace tools unavailable",
       body: "Try selecting the workspace again.",
     });
-    const visiblePanels = this.panels;
-    const selectedPanel = visiblePanels.find((panel) => panel.id === this.tool) ?? visiblePanels[0];
+    if (selectedPanel === undefined) return this.renderEmptyState({
+      title: "No workspace tools available",
+      body: "No tools are available for this workspace.",
+    });
     return html`
-      ${this.hideToolTabs ? null : html`
-        <header>
-          <div class=${this.workspaceHeaderFrameClass()}>
-            <div class="workspace-header-strip" @scroll=${this.onWorkspaceHeaderScroll}>
-              <div class="tabs">
-                ${visiblePanels.map((panel) => {
-                  const selected = selectedPanel?.id === panel.id;
-                  const badge = panel.badge?.(context);
-                  const ariaLabel = this.panelTabAriaLabel(panel, badge);
-                  return html`
-                    <button class=${this.panelTabClass(panel, selected)} title=${ariaLabel} aria-label=${ariaLabel} aria-pressed=${String(selected)} @click=${() => { this.onSelectTool(panel.id); }}>
-                      ${this.renderPanelTabContent(panel, badge)}
-                    </button>
-                  `;
-                })}
-              </div>
-            </div>
-          </div>
-        </header>
-      `}
-      ${selectedPanel === undefined ? this.renderEmptyState({
-        title: "No workspace tools available",
-        body: "No tools are available for this workspace.",
-      }) : html`
-        <div class="panel-content">
-          ${selectedPanel.render(context)}
-        </div>
-      `}
+      <div class="panel-content">
+        ${selectedPanel.render(context)}
+      </div>
     `;
   }
 
-  private panelTabClass(panel: QualifiedWorkspacePanelContribution, selected: boolean): string {
-    return [
-      ...(panel.icon === undefined ? [] : ["icon-tab"]),
-      ...(selected ? ["selected"] : []),
-    ].join(" ");
+  private selectToolFromMenu(tool: QualifiedContributionId, currentTool: QualifiedContributionId | undefined): void {
+    const openedWithCurrent = currentTool === undefined ? this.openedToolIds : addOpenedToolId(this.openedToolIds, currentTool);
+    this.openedToolIds = addOpenedToolId(openedWithCurrent, tool);
+    this.toolMenuOpen = false;
+    this.onSelectTool(tool);
+  }
+
+  private selectOpenedTool(tool: QualifiedContributionId): void {
+    this.onSelectTool(tool);
+  }
+
+  private closeOpenedTool(
+    event: MouseEvent,
+    tool: QualifiedContributionId,
+    openedPanels: readonly QualifiedWorkspacePanelContribution[],
+    visiblePanels: readonly QualifiedWorkspacePanelContribution[],
+    selectedPanel: QualifiedWorkspacePanelContribution | undefined,
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const selectedTool = selectedPanel?.id;
+    const remainingOpenedPanels = openedPanels.filter((panel) => panel.id !== tool);
+    this.openedToolIds = this.openedToolIds.filter((id) => id !== tool);
+    if (selectedTool !== tool) return;
+    const nextPanel = remainingOpenedPanels[0];
+    if (nextPanel !== undefined) {
+      this.onSelectTool(nextPanel.id);
+      return;
+    }
+    this.onCloseLastTool?.();
+  }
+
+  private openedPanels(visiblePanels: readonly QualifiedWorkspacePanelContribution[], selectedPanel: QualifiedWorkspacePanelContribution | undefined): QualifiedWorkspacePanelContribution[] {
+    const ids = selectedPanel === undefined ? this.openedToolIds : addOpenedToolId(this.openedToolIds, selectedPanel.id);
+    const panels = ids.flatMap((id) => {
+      const panel = visiblePanels.find((candidate) => candidate.id === id);
+      return panel === undefined ? [] : [panel];
+    });
+    return panels.length > 0 ? panels : selectedPanel === undefined ? [] : [selectedPanel];
+  }
+
+  private openSettingsFromMenu(): void {
+    this.toolMenuOpen = false;
+    this.onOpenSettings?.();
+  }
+
+  private onHeaderKeyDown(event: KeyboardEvent): void {
+    if (event.key !== "Escape") return;
+    this.toolMenuOpen = false;
+  }
+
+  private renderPanelShortcut(id: QualifiedContributionId): TemplateResult | null {
+    const shortcut = panelShortcut(id);
+    return shortcut === undefined ? null : html`<span class="tool-shortcut">${shortcut}</span>`;
   }
 
   private panelTabAriaLabel(panel: QualifiedWorkspacePanelContribution, badge: WorkspacePanelBadge): string {
@@ -158,4 +261,17 @@ export class WorkspacePanel extends LitElement {
   }
 
   static override styles = workspacePanelStyles;
+}
+
+function addOpenedToolId(ids: readonly QualifiedContributionId[], id: QualifiedContributionId): QualifiedContributionId[] {
+  return ids.includes(id) ? [...ids] : [...ids, id];
+}
+
+function panelShortcut(id: QualifiedContributionId): string | undefined {
+  switch (id) {
+    case "core:workspace.files": return "⌘2";
+    case "core:workspace.git": return "⌘3";
+    case "core:workspace.terminal": return "⌘4";
+    default: return undefined;
+  }
 }

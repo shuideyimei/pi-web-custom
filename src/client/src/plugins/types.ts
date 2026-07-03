@@ -163,6 +163,8 @@ export interface WorkspacePanelContext extends WorkspaceContext {
   onRefreshFiles: () => void;
   onExpandDir: (path: string) => void;
   onSelectFile: (path: string) => void;
+  onRenameFile: (fromPath: string, toPath: string) => void | Promise<void>;
+  onDeleteFile: (path: string) => void | Promise<void>;
   onStartWorkspaceUpload: (files: readonly File[], options: { destinationFolder: string; createDirs?: boolean; overwrite?: boolean; selectUploadedFile?: boolean }) => { batchId: string; done: Promise<void> } | undefined;
   onCancelWorkspaceUpload: (batchId: string) => void;
   onClearWorkspaceUpload: (batchId: string) => void;

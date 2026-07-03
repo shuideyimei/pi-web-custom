@@ -28,6 +28,7 @@ export class AppPanelEdgeControl extends LitElement {
   @property() resizeLabel = "Resize panel";
   @property() expandLabel = "Expand panel";
   @property() collapseLabel = "Collapse panel";
+  @property({ type: Boolean }) showToggle = true;
   @property({ attribute: false }) onToggle?: () => void;
   @property({ attribute: false }) onResizeStart?: () => number | undefined;
   @property({ attribute: false }) onResize?: (width: number) => void;
@@ -46,15 +47,17 @@ export class AppPanelEdgeControl extends LitElement {
     const label = this.collapsed ? this.expandLabel : this.collapseLabel;
     return html`
       ${this.renderResizeHandle()}
-      <button
-        type="button"
-        class="edge-button"
-        title=${label}
-        aria-label=${label}
-        aria-controls=${this.controls}
-        aria-expanded=${String(!this.collapsed)}
-        @click=${() => { this.onToggle?.(); }}
-      >${this.renderIcon()}</button>
+      ${this.showToggle ? html`
+        <button
+          type="button"
+          class="edge-button"
+          title=${label}
+          aria-label=${label}
+          aria-controls=${this.controls}
+          aria-expanded=${String(!this.collapsed)}
+          @click=${() => { this.onToggle?.(); }}
+        >${this.renderIcon()}</button>
+      ` : nothing}
     `;
   }
 
