@@ -1,15 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="PI WEB icon">
   <defs>
-    <linearGradient id="bg" x1="128" y1="104" x2="884" y2="930" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="0" y1="-32" x2="1008" y2="1069" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#101b2b"/>
       <stop offset="1" stop-color="#08111f"/>
     </linearGradient>
-    <filter id="softShadow" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#07111f" flood-opacity="0.18"/>
-    </filter>
   </defs>
-  <rect x="128" y="128" width="768" height="768" rx="148" fill="url(#bg)" filter="url(#softShadow)"/>
-  <path d="M304 727 C322 585 412 404 654 242 C518 352 382 560 313 722 C310 729 305 731 304 727 Z" fill="#fff"/>
-  <path d="M319 734 C430 604 578 500 759 469 C591 511 450 603 326 739 C321 744 316 741 319 734 Z" fill="#fff"/>
-  <path d="M337 740 C464 672 618 672 752 768 C619 700 483 695 342 745 C335 748 332 744 337 740 Z" fill="#fff"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="197" fill="url(#bg)"/>
+  <g transform="matrix(1.333333 0 0 1.333333 -170.666667 -170.666667)">
+    <path d="M304 727 C322 585 412 404 654 242 C518 352 382 560 313 722 C310 729 305 731 304 727 Z" fill="#fff"/>
+    <path d="M319 734 C430 604 578 500 759 469 C591 511 450 603 326 739 C321 744 316 741 319 734 Z" fill="#fff"/>
+    <path d="M337 740 C464 672 618 672 752 768 C619 700 483 695 342 745 C335 748 332 744 337 740 Z" fill="#fff"/>
+  </g>
 </svg>
