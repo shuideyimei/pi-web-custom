@@ -13,6 +13,12 @@ describe("chat message normalization", () => {
     ]);
   });
 
+  it("normalizes display custom messages as neutral notices", () => {
+    expect(normalizeMessage({ role: "custom", customType: "subagent_companion_suggestions", content: "Recommended: install companion packages" })).toEqual([
+      textMessage("notice", "Recommended: install companion packages"),
+    ]);
+  });
+
   it("preserves already-normalized chat lines", () => {
     const line = { role: "assistant" as const, parts: [{ type: "text" as const, text: "cached" }] };
 

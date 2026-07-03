@@ -41,6 +41,14 @@ describe("groupChatMessages", () => {
     ]);
   });
 
+  it("keeps notice text out of event groups", () => {
+    const messages: ChatLine[] = [text("notice", "Recommended: install companion packages")];
+
+    expect(groupChatMessages(messages)).toEqual([
+      { kind: "message", index: 0, message: text("notice", "Recommended: install companion packages") },
+    ]);
+  });
+
   it("preserves message metadata when grouping", () => {
     const message: ChatLine = { role: "assistant", parts: [{ type: "thinking", text: "hidden" }, { type: "text", text: "shown" }], meta: { timestamp: "2026-05-09T12:00:00.000Z", model: { provider: "test", id: "model" } } };
 

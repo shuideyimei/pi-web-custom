@@ -31,7 +31,7 @@ export type ChatPart =
   | { type: "empty" };
 
 export interface ChatLine {
-  role: "user" | "assistant" | "tool" | "system" | "bash" | "skill";
+  role: "user" | "assistant" | "tool" | "system" | "notice" | "bash" | "skill";
   parts: ChatPart[];
   source?: "compaction" | "branch_summary";
   meta?: {
@@ -388,6 +388,9 @@ export const chatStyles = css`
   /* ── System message ── */
   .msg.system { color: var(--pi-danger); background: var(--pi-danger-bg); }
 
+  /* ── Notice message ── */
+  .msg.notice { color: var(--pi-text-secondary); background: var(--pi-surface); }
+
   /* ── Bash message ── */
   .msg.bash { background: var(--pi-success-bg); }
 
@@ -410,6 +413,7 @@ export const chatStyles = css`
   .group-msg.tool { color: var(--pi-warning); }
   .group-msg.tool-execution-shell { color: var(--pi-text); }
   .group-msg.system { color: var(--pi-danger); }
+  .group-msg.notice { color: var(--pi-text-secondary); }
   .group-msg.bash { color: var(--pi-success); }
 
   /* ── History boundary ── */
@@ -805,6 +809,15 @@ export const chatStyles = css`
       pointer-events: auto;
       transform: none;
     }
+  }
+
+  /* ── Notice line (custom extension/session notices) ── */
+  .tl-notice {
+    box-sizing: border-box;
+    max-width: min(760px, 100%);
+    color: var(--pi-text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
   }
 
   /* ── Meta line (compaction / events summary) ── */

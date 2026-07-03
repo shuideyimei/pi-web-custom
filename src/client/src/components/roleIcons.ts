@@ -11,7 +11,7 @@
 
 import { html, css, type TemplateResult, type CSSResult } from "lit";
 
-export type ChatRole = "user" | "assistant" | "system" | "bash" | "skill" | "tool";
+export type ChatRole = "user" | "assistant" | "system" | "notice" | "bash" | "skill" | "tool";
 
 /** Render an SVG role icon (20×20 viewBox) */
 export function renderRoleIcon(role: ChatRole): TemplateResult {
@@ -19,6 +19,7 @@ export function renderRoleIcon(role: ChatRole): TemplateResult {
     case "user":      return userIcon;
     case "assistant": return assistantIcon;
     case "system":    return systemIcon;
+    case "notice":    return noticeIcon;
     case "bash":      return bashIcon;
     case "skill":     return skillIcon;
     case "tool":      return toolIcon;
@@ -48,6 +49,14 @@ const systemIcon: TemplateResult = html`
   <svg class="ri" viewBox="0 0 20 20" fill="none" aria-hidden="true">
     <circle cx="10" cy="10" r="1.8" fill="currentColor"/>
     <path d="M10 4v3M10 13v3M4 10h3M13 10h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
+  </svg>`;
+
+/** Notice: low-key information circle */
+const noticeIcon: TemplateResult = html`
+  <svg class="ri" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <circle cx="10" cy="10" r="6" stroke="currentColor" stroke-width="1.3" opacity=".75"/>
+    <path d="M10 9v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="10" cy="6.6" r=".9" fill="currentColor"/>
   </svg>`;
 
 /** Bash: prompt symbol >_ reduced to two strokes */
@@ -115,6 +124,10 @@ export const roleIconStyles: CSSResult = css`
   /* ── System: danger red ── */
   .msg.system .role-icon { color: var(--pi-danger); }
   .msg.system .role-icon:hover { background: color-mix(in srgb, var(--pi-danger) 6%, transparent); }
+
+  /* ── Notice: muted information ── */
+  .msg.notice .role-icon { color: var(--pi-muted); }
+  .msg.notice .role-icon:hover { background: var(--pi-hover-overlay); }
 
   /* ── Bash: mint green with cursor blink ── */
   .msg.bash .role-icon { color: var(--pi-success); }

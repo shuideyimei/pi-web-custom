@@ -58,6 +58,17 @@ describe("assistantCompletionFooterKeys", () => {
 
     expect([...keys]).toEqual(["a:1"]);
   });
+
+  it("allows neutral notices after the assistant response", () => {
+    const keys = assistantCompletionFooterKeys([
+      node("user", "u:1"),
+      node("step", "step:1", "success"),
+      node("assistant", "a:1"),
+      node("notice", "n:1"),
+    ]);
+
+    expect([...keys]).toEqual(["a:1"]);
+  });
 });
 
 function node(type: TimelineNodeType, key: string, status: TimelineNodeStatus = "idle"): TimelineNode {

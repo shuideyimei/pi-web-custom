@@ -414,6 +414,8 @@ export class ChatView extends LitElement {
         return this.renderStepNode(node, isStreamingNode, stepSummaryReady);
       case "error":
         return this.renderErrorNode(node);
+      case "notice":
+        return this.renderNoticeNode(node);
       case "bash":
         return this.renderBashNode(node);
       case "thinking":
@@ -673,6 +675,12 @@ export class ChatView extends LitElement {
     return html`
       <error-panel .message=${textPart?.text ?? ""}></error-panel>
     `;
+  }
+
+  private renderNoticeNode(node: TimelineNode) {
+    const textPart = node.parts.find((p): p is Extract<ChatPart, { type: "text" }> => p.type === "text");
+    if (!textPart) return null;
+    return html`<div class="tl-notice"><formatted-text .text=${textPart.text}></formatted-text></div>`;
   }
 
   private renderBashNode(node: TimelineNode) {

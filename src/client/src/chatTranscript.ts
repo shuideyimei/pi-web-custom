@@ -25,7 +25,7 @@ export function applyTranscriptEvent(messages: ChatLine[], event: SessionUiEvent
   if (event.type === "command.output") {
     const text = stripTuiFlavorText(event.message);
     if (text === "") return messages;
-    return [...messages, textMessage(event.level === "error" ? "system" : "tool", text)];
+    return [...messages, textMessage(event.level === "error" ? "system" : "notice", text)];
   }
   if (event.type === "session.error") return [...messages, textMessage("system", event.message)];
   if (event.type === "message.end") return event.message === undefined ? undefined : applyFinalMessage(messages, event.message);

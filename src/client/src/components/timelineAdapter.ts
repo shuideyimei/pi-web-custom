@@ -34,6 +34,7 @@ export type TimelineNodeType =
   | "tool"        // Tool call (aggregated call + execution + result)
   | "step"        // Codex-style step: thinking + tool calls grouped as one compact row
   | "error"       // System / error message
+  | "notice"      // Non-error custom/session notice
   | "bash"        // Shell output log
   | "thinking"    // Thinking section (standalone, not part of a step)
   | "skill"       // Skill invocation / read
@@ -219,6 +220,9 @@ export function buildTimelineNodes(
             } else {
               nodes.push(makeStepNode(`bash:${partKey}`, undefined, [], [part.text], message.meta));
             }
+          } else if (message.role === "notice") {
+            flushOpenStep(`step:${partKey}`, message.meta);
+            nodes.push({ type: "notice", status: "idle", key: `n:${partKey}`, parts: [part], meta: message.meta });
           } else if (message.role === "system") {
             flushOpenStep(`step:${partKey}`, message.meta);
             nodes.push({ type: "error", status: "error", key: `s:${partKey}`, parts: [part], meta: message.meta });

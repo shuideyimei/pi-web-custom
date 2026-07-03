@@ -60,6 +60,18 @@ describe("applyTranscriptEvent", () => {
     expect(applyTranscriptEvent(messages, { type: "assistant.delta", text: "" })).toEqual(messages);
   });
 
+  it("renders non-error command output as a neutral notice", () => {
+    expect(applyTranscriptEvent([], { type: "command.output", level: "info", message: "Recommended: install companion packages" })).toEqual([
+      textMessage("notice", "Recommended: install companion packages"),
+    ]);
+  });
+
+  it("keeps error command output as a system error", () => {
+    expect(applyTranscriptEvent([], { type: "command.output", level: "error", message: "Compaction failed" })).toEqual([
+      textMessage("system", "Compaction failed"),
+    ]);
+  });
+
   it("strips TUI flavor text and echoed prompt from finalized assistant messages", () => {
     const streamed: ChatLine[] = [textMessage("user", "了解项目")];
 

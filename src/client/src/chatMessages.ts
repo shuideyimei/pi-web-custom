@@ -96,7 +96,7 @@ function assistantErrorLine(message: unknown): ChatLine | undefined {
 
 function isChatLine(message: unknown): message is ChatLine {
   const role = getString(message, "role");
-  return (role === "user" || role === "assistant" || role === "tool" || role === "system" || role === "bash" || role === "skill")
+  return (role === "user" || role === "assistant" || role === "tool" || role === "system" || role === "notice" || role === "bash" || role === "skill")
     && Array.isArray(getProperty(message, "parts"));
 }
 
@@ -173,6 +173,7 @@ function normalizeRole(role: unknown): ChatLine["role"] {
   if (role === "assistant") return "assistant";
   if (role === "user") return "user";
   if (role === "toolResult") return "tool";
+  if (role === "custom" || role === "notice") return "notice";
   return "system";
 }
 

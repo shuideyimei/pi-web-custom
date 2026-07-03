@@ -34,6 +34,7 @@ export class MessageBubble extends LitElement {
     if (role === "user") return html`<div class="avatar user-avatar">U</div>`;
     if (role === "assistant") return html`<div class="avatar assistant-avatar">AI</div>`;
     if (role === "system") return html`<div class="avatar system-avatar">S</div>`;
+    if (role === "notice") return html`<div class="avatar notice-avatar">i</div>`;
     if (role === "bash") return html`<div class="avatar bash-avatar">$</div>`;
     return html`<div class="avatar tool-avatar">T</div>`;
   }
@@ -135,6 +136,7 @@ export class MessageBubble extends LitElement {
     .bubble.user { color: var(--pi-user-message-text); }
     .bubble.assistant { background: transparent; }
     .bubble.system { background: var(--pi-danger-bg); }
+    .bubble.notice { background: var(--pi-surface); color: var(--pi-text-secondary); }
     .bubble.bash { background: var(--pi-success-bg); }
     .bubble.tool { color: var(--pi-warning); }
     .bubble.skill { background: var(--pi-purple-surface); }
@@ -142,6 +144,7 @@ export class MessageBubble extends LitElement {
     .user-avatar { background: color-mix(in srgb, var(--pi-text) 8%, transparent); color: var(--pi-text-secondary); }
     .assistant-avatar { background: var(--pi-hover-overlay); color: var(--pi-text-secondary); }
     .system-avatar { background: var(--pi-danger-bg); color: var(--pi-danger); }
+    .notice-avatar { background: var(--pi-surface-hover); color: var(--pi-muted); }
     .bash-avatar { background: var(--pi-success-bg); color: var(--pi-success); font-family: ui-monospace, monospace; }
     .tool-avatar { background: var(--pi-warning-surface); color: var(--pi-warning); }
     .bubble-content { min-width: 0; display: grid; gap: 4px; }
@@ -164,6 +167,7 @@ function roleLabel(role: string): string {
   if (role === "user") return "You";
   if (role === "assistant") return "Assistant";
   if (role === "system") return "System";
+  if (role === "notice") return "Notice";
   if (role === "bash") return "Shell";
   if (role === "skill") return "Skill";
   return "Tool";

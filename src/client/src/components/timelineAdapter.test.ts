@@ -228,6 +228,15 @@ describe("buildTimelineNodes", () => {
     assert.equal(node.status, "error");
   });
 
+  it("converts a notice text message into an idle notice node", () => {
+    const messages = [chatLine("notice", [textPart("Recommended: install companion packages")])];
+    const nodes = buildTimelineNodes(messages);
+    const node = nodeAt(nodes, 0);
+    assert.equal(nodes.length, 1);
+    assert.equal(node.type, "notice");
+    assert.equal(node.status, "idle");
+  });
+
   it("creates a meta node for compaction source messages", () => {
     const messages = [chatLine("tool", [textPart("summary")], undefined, "compaction")];
     const nodes = buildTimelineNodes(messages);

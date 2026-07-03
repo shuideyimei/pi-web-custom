@@ -41,5 +41,5 @@ function addFooterKey(footerKeys: Set<string>, candidate: FooterCandidate | unde
 }
 
 function isResponseTimelineContent(node: TimelineNode): boolean {
-  return node.type !== "meta";
+  return node.type !== "meta" && node.type !== "notice";
 }
