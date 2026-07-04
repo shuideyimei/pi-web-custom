@@ -1,4 +1,4 @@
-import { api } from "../api";
+import { api, type GitStatusResponse } from "../api";
 import { queryNamespace, setNamespacedQueryKey } from "../namespacedQueryArgs";
 import { workspaceRelativePath } from "../workspacePaths";
 import { selectedMachineId, type GetState, type SetState, type UpdateUrl } from "./types";
@@ -20,8 +20,12 @@ export class GitController {
     const workspace = this.getState().selectedWorkspace;
     if (project === undefined || workspace === undefined) return;
     try {
-      const status = await api.gitStatus(project.id, workspace.id, selectedMachineId(this.getState()));
-      this.setState({ gitStatus: status, gitStale: false, error: "" });
+      const machineId = selectedMachineId(this.getState());
+      const [status, gitLog] = await Promise.all([
+        api.gitStatus(project.id, workspace.id, machineId),
+        api.gitLog(project.id, workspace.id, machineId),
+      ]);
+      this.setState({ gitStatus: status, gitLog, gitStale: false, error: "" });
       const selectedDiffPath = this.getState().selectedDiffPath;
       if (selectedDiffPath !== undefined) {
         const diffPath = this.workspaceDiffPath(selectedDiffPath);
@@ -31,7 +35,7 @@ export class GitController {
         }
         if (status.isGitRepo) await this.refreshDiff(diffPath);
         else {
-          this.setState({ selectedDiffPath: undefined, selectedDiff: undefined, selectedStagedDiff: undefined });
+          this.setState({ selectedDiffPath: undefined, selectedDiff: undefined, selectedStagedDiff: undefined, gitLog });
           setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", undefined, { replace: true });
         }
       }
@@ -54,6 +58,40 @@ export class GitController {
     await this.refreshDiff(diffPath);
   }
 
+  async stageFile(path: string): Promise<void> {
+    const diffPath = this.workspaceDiffPath(path);
+    await this.applyGitStatusAction((projectId, workspaceId, machineId) => api.gitStage(projectId, workspaceId, { path: diffPath }, machineId));
+  }
+
+  async unstageFile(path: string): Promise<void> {
+    const diffPath = this.workspaceDiffPath(path);
+    await this.applyGitStatusAction((projectId, workspaceId, machineId) => api.gitUnstage(projectId, workspaceId, { path: diffPath }, machineId));
+  }
+
+  async stageAll(): Promise<void> {
+    await this.applyGitStatusAction((projectId, workspaceId, machineId) => api.gitStage(projectId, workspaceId, {}, machineId));
+  }
+
+  async unstageAll(): Promise<void> {
+    await this.applyGitStatusAction((projectId, workspaceId, machineId) => api.gitUnstage(projectId, workspaceId, {}, machineId));
+  }
+
+  async commit(message: string): Promise<void> {
+    const project = this.getState().selectedProject;
+    const workspace = this.getState().selectedWorkspace;
+    if (project === undefined || workspace === undefined) return;
+    const machineId = selectedMachineId(this.getState());
+    try {
+      const response = await api.gitCommit(project.id, workspace.id, { message }, machineId);
+      const gitLog = await api.gitLog(project.id, workspace.id, machineId);
+      await this.applyGitStatus(response.status);
+      this.setState({ gitLog, error: "" });
+    } catch (error) {
+      this.setState({ error: String(error) });
+      throw error;
+    }
+  }
+
   async refreshDiff(path: string): Promise<void> {
     const project = this.getState().selectedProject;
     const workspace = this.getState().selectedWorkspace;
@@ -68,6 +106,28 @@ export class GitController {
     } catch (error) {
       this.setState({ error: String(error) });
     }
+  }
+
+  private async applyGitStatusAction(action: (projectId: string, workspaceId: string, machineId: string) => Promise<{ status: GitStatusResponse }>): Promise<void> {
+    const project = this.getState().selectedProject;
+    const workspace = this.getState().selectedWorkspace;
+    if (project === undefined || workspace === undefined) return;
+    const machineId = selectedMachineId(this.getState());
+    try {
+      const response = await action(project.id, workspace.id, machineId);
+      await this.applyGitStatus(response.status);
+      this.setState({ error: "" });
+    } catch (error) {
+      this.setState({ error: String(error) });
+      throw error;
+    }
+  }
+
+  private async applyGitStatus(status: GitStatusResponse): Promise<void> {
+    this.setState({ gitStatus: status, gitStale: false });
+    const selectedDiffPath = this.getState().selectedDiffPath;
+    if (selectedDiffPath === undefined || selectedDiffPath === "") return;
+    await this.refreshDiff(selectedDiffPath);
   }
 
   updatePolling(): void {

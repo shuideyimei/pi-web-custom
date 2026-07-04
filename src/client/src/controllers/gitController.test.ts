@@ -34,6 +34,7 @@ describe("GitController", () => {
     const committedDiff = diffResponse({ path: "src/App.ts", diff: "diff --git a/src/App.ts b/src/App.ts\n+new", committed: true });
     const stagedDiff = diffResponse({ path: "src/App.ts", staged: true });
     vi.spyOn(api, "gitStatus").mockResolvedValue(gitStatus([]));
+    vi.spyOn(api, "gitLog").mockResolvedValue(gitLog());
     vi.spyOn(api, "gitDiff")
       .mockResolvedValueOnce(committedDiff)
       .mockResolvedValueOnce(stagedDiff);
@@ -51,6 +52,7 @@ describe("GitController", () => {
     installWindowStub();
     const harness = createHarness({ selectedDiffPath: "src/App.ts", selectedDiff: diffResponse({ path: "src/App.ts" }), selectedStagedDiff: diffResponse({ path: "src/App.ts", staged: true }) });
     vi.spyOn(api, "gitStatus").mockResolvedValue({ isGitRepo: false, hash: "not-git", files: [] });
+    vi.spyOn(api, "gitLog").mockResolvedValue({ isGitRepo: false, entries: [] });
     const gitDiff = vi.spyOn(api, "gitDiff");
 
     await harness.controller.refreshGit();
@@ -79,6 +81,10 @@ function createHarness(overrides: Partial<AppState> = {}): { controller: GitCont
 
 function gitStatus(files: GitStatusResponse["files"]): GitStatusResponse {
   return { isGitRepo: true, hash: "status", files };
+}
+
+function gitLog() {
+  return { isGitRepo: true, entries: [] };
 }
 
 function diffResponse(overrides: Partial<GitDiffResponse>): GitDiffResponse {

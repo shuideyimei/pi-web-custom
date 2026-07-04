@@ -448,6 +448,33 @@ export interface GitDiffResponse {
   committed?: boolean;
 }
 
+export interface GitActionResponse {
+  ok: true;
+  status: GitStatusResponse;
+}
+
+export interface GitCommitResponse extends GitActionResponse {
+  commit: string;
+  summary: string;
+}
+
+export interface GitLogEntry {
+  hash: string;
+  shortHash: string;
+  parents: string[];
+  refs: string[];
+  subject: string;
+  authorName: string;
+  relativeDate: string;
+}
+
+export interface GitLogResponse {
+  isGitRepo: boolean;
+  branch?: string;
+  upstream?: string;
+  entries: GitLogEntry[];
+}
+
 export interface TerminalInfo {
   id: string;
   cwd: string;

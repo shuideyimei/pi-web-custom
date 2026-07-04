@@ -1361,6 +1361,7 @@ export class PiWebApp extends LitElement {
         selectedFileContent: this.state.selectedFileContent,
         fileTreeStale: this.state.fileTreeStale,
         gitStatus: this.state.gitStatus,
+        gitLog: this.state.gitLog,
         selectedDiffPath: this.state.selectedDiffPath,
         selectedDiff: this.state.selectedDiff,
         selectedStagedDiff: this.state.selectedStagedDiff,
@@ -1379,6 +1380,11 @@ export class PiWebApp extends LitElement {
         onClearWorkspaceUpload: (batchId) => { this.files.clearWorkspaceUpload(batchId); },
         onRefreshGit: () => { void this.git.refreshGit(); },
         onSelectDiff: (path: string) => { void this.git.selectDiff(path); },
+        onStageGitFile: (path: string) => this.git.stageFile(path),
+        onUnstageGitFile: (path: string) => this.git.unstageFile(path),
+        onStageAllGitFiles: () => this.git.stageAll(),
+        onUnstageAllGitFiles: () => this.git.unstageAll(),
+        onCommitGitChanges: (message: string) => this.git.commit(message),
         onSelectTerminal: (terminalId: string | undefined, options?: { replace?: boolean | undefined }) => { this.selectTerminal(terminalId, options); },
       }, createContext);
     };

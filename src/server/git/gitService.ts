@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import type { GitDiffResponse, GitFileState, GitStatusFile, GitStatusResponse } from "../../shared/apiTypes.js";
+import type { GitActionResponse, GitCommitResponse, GitDiffResponse, GitFileState, GitLogEntry, GitLogResponse, GitStatusFile, GitStatusResponse } from "../../shared/apiTypes.js";
 import { normalizeRelativePath } from "../workspaces/pathSafety.js";
 import { sanitizedGitEnv } from "./gitEnv.js";
 
@@ -22,10 +22,10 @@ export async function gitDiff(cwd: string, options: { path?: string; staged?: bo
   if (path !== undefined) args.push("--", path);
 
   const result = await runGit(cwd, args);
-  if (result.code !== 0) throw new Error(result.stderr.trim() || "git diff failed");
+  if (result.code !== 0) throwGitError(result, "git diff failed");
   if (!staged && path !== undefined && result.stdout === "" && await isUntracked(cwd, path)) {
     const untracked = await runGit(cwd, ["diff", "--no-ext-diff", "--color=never", "--no-index", "/dev/null", "--", path]);
-    if (untracked.code !== 0 && untracked.code !== 1) throw new Error(untracked.stderr.trim() || "git diff failed");
+    if (untracked.code !== 0 && untracked.code !== 1) throwGitError(untracked, "git diff failed");
     return { path, staged, hash: hash(untracked.stdout), diff: untracked.stdout, truncated: untracked.truncated };
   }
   if (!staged && path !== undefined && result.stdout === "") {
@@ -33,6 +33,52 @@ export async function gitDiff(cwd: string, options: { path?: string; staged?: bo
     if (committed !== undefined) return committed;
   }
   return { ...(path === undefined ? {} : { path }), staged, hash: hash(result.stdout), diff: result.stdout, truncated: result.truncated };
+}
+
+export async function gitLog(cwd: string, limit = 60): Promise<GitLogResponse> {
+  const safeLimit = String(Math.min(Math.max(Math.round(limit), 1), 200));
+  const [result, status] = await Promise.all([
+    runGit(cwd, ["log", `-${safeLimit}`, "--date=relative", "--decorate=short", "--format=%H%x1f%h%x1f%P%x1f%D%x1f%s%x1f%an%x1f%cr%x1e"]),
+    gitStatus(cwd),
+  ]);
+  if (!status.isGitRepo) return { isGitRepo: false, entries: [] };
+  return {
+    isGitRepo: true,
+    ...(status.branch === undefined ? {} : { branch: status.branch }),
+    ...(status.upstream === undefined ? {} : { upstream: status.upstream }),
+    entries: result.code === 0 ? parseLog(result.stdout) : [],
+  };
+}
+
+export async function gitStage(cwd: string, options: { path?: string }): Promise<GitActionResponse> {
+  const path = normalizeOptionalGitPath(options.path);
+  const result = await runGit(cwd, path === undefined ? ["add", "--all"] : ["add", "--all", "--", path]);
+  if (result.code !== 0) throwGitError(result, "git stage failed");
+  return { ok: true, status: await gitStatus(cwd) };
+}
+
+export async function gitUnstage(cwd: string, options: { path?: string }): Promise<GitActionResponse> {
+  const path = normalizeOptionalGitPath(options.path);
+  const result = await runGit(cwd, path === undefined ? ["restore", "--staged", ":/"] : ["restore", "--staged", "--", path]);
+  if (result.code !== 0) {
+    const fallback = await runGit(cwd, path === undefined ? ["reset", "--mixed"] : ["reset", "--", path]);
+    if (fallback.code !== 0) throwGitError(fallback, "git unstage failed");
+  }
+  return { ok: true, status: await gitStatus(cwd) };
+}
+
+export async function gitCommit(cwd: string, options: { message: string }): Promise<GitCommitResponse> {
+  const message = options.message.trim();
+  if (message === "") throw new Error("Commit message is required");
+  const stagedCheck = await runGit(cwd, ["diff", "--cached", "--quiet"]);
+  if (stagedCheck.code === 0) throw new Error("No staged changes to commit");
+  if (stagedCheck.code !== 1) throwGitError(stagedCheck, "git commit failed");
+  const result = await runGit(cwd, ["commit", "-m", message]);
+  if (result.code !== 0) throwGitError(result, "git commit failed");
+  const commit = await runGit(cwd, ["rev-parse", "HEAD"]);
+  if (commit.code !== 0) throwGitError(commit, "git commit failed");
+  const commitHash = commit.stdout.trim();
+  return { ok: true, commit: commitHash, summary: firstCommitOutputLine(result.stdout), status: await gitStatus(cwd) };
 }
 
 async function lastCommitDiff(cwd: string, path: string): Promise<GitDiffResponse | undefined> {
@@ -48,6 +94,40 @@ async function lastCommitDiff(cwd: string, path: string): Promise<GitDiffRespons
 async function isUntracked(cwd: string, path: string): Promise<boolean> {
   const result = await runGit(cwd, ["ls-files", "--others", "--exclude-standard", "-z", "--", path]);
   return result.code === 0 && result.stdout.split("\0").includes(path);
+}
+
+function normalizeOptionalGitPath(path: string | undefined): string | undefined {
+  if (path === undefined || path === "") return undefined;
+  return normalizeRelativePath(path);
+}
+
+function parseLog(raw: string): GitLogEntry[] {
+  return raw
+    .split("\x1e")
+    .map((record) => record.trim())
+    .filter((record) => record !== "")
+    .flatMap((record) => {
+      const [hashValue, shortHash, parentsRaw, refsRaw, subject, authorName, relativeDate] = record.split("\x1f");
+      if (hashValue === undefined || shortHash === undefined || subject === undefined || authorName === undefined || relativeDate === undefined) return [];
+      return [{
+        hash: hashValue,
+        shortHash,
+        parents: parentsRaw === undefined || parentsRaw === "" ? [] : parentsRaw.split(" ").filter((parent) => parent !== ""),
+        refs: refsRaw === undefined || refsRaw === "" ? [] : refsRaw.split(",").map((ref) => ref.trim()).filter((ref) => ref !== ""),
+        subject,
+        authorName,
+        relativeDate,
+      }];
+    });
+}
+
+function firstCommitOutputLine(stdout: string): string {
+  return stdout.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? "Committed staged changes";
+}
+
+function throwGitError(result: { stderr: string; stdout: string }, fallback: string): never {
+  const message = result.stderr.trim() || result.stdout.trim() || fallback;
+  throw new Error(message);
 }
 
 function parseStatus(raw: string): GitStatusResponse {

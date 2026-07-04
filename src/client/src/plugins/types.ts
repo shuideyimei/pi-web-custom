@@ -1,6 +1,6 @@
 import type { TemplateResult } from "lit";
 import type { AppAction } from "../actions";
-import type { DeleteWorkspaceFileResponse, FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Machine, MoveWorkspaceFileOptions, MoveWorkspaceFileResponse, RunTerminalCommandInput, TerminalCommandRun, TerminalCommandRunFilter, TerminalCommandRunHandle, WriteWorkspaceFileOptions, WriteWorkspaceFileResponse, Workspace } from "../api";
+import type { DeleteWorkspaceFileResponse, FileContentResponse, FileTreeEntry, GitDiffResponse, GitLogResponse, GitStatusResponse, Machine, MoveWorkspaceFileOptions, MoveWorkspaceFileResponse, RunTerminalCommandInput, TerminalCommandRun, TerminalCommandRunFilter, TerminalCommandRunHandle, WriteWorkspaceFileOptions, WriteWorkspaceFileResponse, Workspace } from "../api";
 import type { AppState } from "../appState";
 import type { SettingsSection } from "../settingsRoute";
 import type { LocalContributionId, PluginId, QualifiedContributionId } from "./ids";
@@ -152,6 +152,7 @@ export interface WorkspacePanelContext extends WorkspaceContext {
   selectedFileContent: FileContentResponse | undefined;
   fileTreeStale: boolean;
   gitStatus: GitStatusResponse | undefined;
+  gitLog: GitLogResponse | undefined;
   selectedDiffPath: string | undefined;
   selectedDiff: GitDiffResponse | undefined;
   selectedStagedDiff: GitDiffResponse | undefined;
@@ -170,6 +171,11 @@ export interface WorkspacePanelContext extends WorkspaceContext {
   onClearWorkspaceUpload: (batchId: string) => void;
   onRefreshGit: () => void;
   onSelectDiff: (path: string) => void;
+  onStageGitFile: (path: string) => void | Promise<void>;
+  onUnstageGitFile: (path: string) => void | Promise<void>;
+  onStageAllGitFiles: () => void | Promise<void>;
+  onUnstageAllGitFiles: () => void | Promise<void>;
+  onCommitGitChanges: (message: string) => void | Promise<void>;
   onSelectTerminal: (terminalId: string | undefined, options?: { replace?: boolean | undefined }) => void;
 }
 

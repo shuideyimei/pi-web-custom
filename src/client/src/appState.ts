@@ -1,4 +1,4 @@
-import type { AuthProviderOption, CommandOption, CommandResult, ExtensionOverlay, FileContentResponse, FileTreeEntry, GitDiffResponse, GitStatusResponse, Machine, MachineHealth, MachineRuntime, OAuthFlowState, PiWebStatusResponse, Project, SessionActivity, SessionInfo, SessionStatus, TerminalCommandRun, TokenUsageSummary, Workspace, WorkspaceActivity } from "./api";
+import type { AuthProviderOption, CommandOption, CommandResult, ExtensionOverlay, FileContentResponse, FileTreeEntry, GitDiffResponse, GitLogResponse, GitStatusResponse, Machine, MachineHealth, MachineRuntime, OAuthFlowState, PiWebStatusResponse, Project, SessionActivity, SessionInfo, SessionStatus, TerminalCommandRun, TokenUsageSummary, Workspace, WorkspaceActivity } from "./api";
 import type { ChatLine } from "./components/shared";
 import type { QualifiedContributionId } from "./plugins/ids";
 import type { WorkspaceUploadBatchState } from "./workspaceUploadState";
@@ -55,6 +55,7 @@ export interface AppState {
   /** Manual workspace file upload batches, keyed by client-owned batch id. */
   workspaceUploadBatches: Record<string, WorkspaceUploadBatchState>;
   gitStatus: GitStatusResponse | undefined;
+  gitLog: GitLogResponse | undefined;
   selectedDiffPath: string | undefined;
   selectedDiff: GitDiffResponse | undefined;
   selectedStagedDiff: GitDiffResponse | undefined;
@@ -83,6 +84,7 @@ export type WorkspaceScopedStateReset = Pick<AppState,
   | "selectedFileContent"
   | "fileTreeStale"
   | "gitStatus"
+  | "gitLog"
   | "selectedDiffPath"
   | "selectedDiff"
   | "selectedStagedDiff"
@@ -100,6 +102,7 @@ export function resetWorkspaceScopedState(): WorkspaceScopedStateReset {
     selectedFileContent: undefined,
     fileTreeStale: false,
     gitStatus: undefined,
+    gitLog: undefined,
     selectedDiffPath: undefined,
     selectedDiff: undefined,
     selectedStagedDiff: undefined,
@@ -158,6 +161,7 @@ export function initialAppState(): AppState {
     fileTreeStale: false,
     workspaceUploadBatches: {},
     gitStatus: undefined,
+    gitLog: undefined,
     selectedDiffPath: undefined,
     selectedDiff: undefined,
     selectedStagedDiff: undefined,

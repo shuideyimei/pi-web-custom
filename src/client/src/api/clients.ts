@@ -13,7 +13,10 @@ import {
   parseFileContentResponse,
   parseFileSuggestion,
   parseFileTreeResponse,
+  parseGitActionResponse,
+  parseGitCommitResponse,
   parseGitDiffResponse,
+  parseGitLogResponse,
   parseGitStatusResponse,
   parseMachine,
   parseMachineHealth,
@@ -271,6 +274,10 @@ export const filesApi = {
 export const gitApi = {
   gitStatus: (projectId: string, workspaceId: string, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/status`, parseGitStatusResponse),
   gitDiff: (projectId: string, workspaceId: string, options?: { path?: string; staged?: boolean }, machineId = "local") => request(machineGitDiffUrl(machineId, projectId, workspaceId, options), parseGitDiffResponse),
+  gitLog: (projectId: string, workspaceId: string, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/log`, parseGitLogResponse),
+  gitStage: (projectId: string, workspaceId: string, options: { path?: string }, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/stage`, parseGitActionResponse, { method: "POST", body: JSON.stringify(options) }),
+  gitUnstage: (projectId: string, workspaceId: string, options: { path?: string }, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/unstage`, parseGitActionResponse, { method: "POST", body: JSON.stringify(options) }),
+  gitCommit: (projectId: string, workspaceId: string, options: { message: string }, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/commit`, parseGitCommitResponse, { method: "POST", body: JSON.stringify(options) }),
 };
 
 export const api = {

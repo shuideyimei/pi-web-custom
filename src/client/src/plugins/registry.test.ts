@@ -613,6 +613,7 @@ function createWorkspacePanelContext(machineId: string, prompt: WorkspacePanelCo
     selectedFileContent: undefined,
     fileTreeStale: false,
     gitStatus: undefined,
+    gitLog: undefined,
     selectedDiffPath: undefined,
     selectedDiff: undefined,
     selectedStagedDiff: undefined,
@@ -631,6 +632,11 @@ function createWorkspacePanelContext(machineId: string, prompt: WorkspacePanelCo
     onClearWorkspaceUpload: vi.fn(),
     onRefreshGit: vi.fn(),
     onSelectDiff: vi.fn(),
+    onStageGitFile: vi.fn(),
+    onUnstageGitFile: vi.fn(),
+    onStageAllGitFiles: vi.fn(),
+    onUnstageAllGitFiles: vi.fn(),
+    onCommitGitChanges: vi.fn(),
     onSelectTerminal: vi.fn(),
   };
 }

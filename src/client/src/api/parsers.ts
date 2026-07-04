@@ -1,4 +1,4 @@
-import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, DailyTokenUsage, DeleteWorkspaceFileResponse, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitDiffResponse, GitFileState, GitStatusFile, GitStatusResponse, Machine, MachineHealth, MachineKind, MachineRuntime, MachineStatus, MessagePage, ModelSelectionResponse, MoveWorkspaceFileResponse, OAuthFlowState, PiPackageInfo, PiPackageInstallResponse, PiPackagesResponse, PiPackageScope, PiWebCapability, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebPluginConfigMap, PiWebPluginInfo, PiWebPluginsResponse, PiWebPluginScope, PiWebReleaseStatus, PiWebRuntimeComponent, PiWebRuntimeResponse, PiWebServiceComponent, PiWebShortcutConfig, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SavedPromptAttachment, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevelsResponse, TokenUsageSummary, TokenUsageSummaryResponse, WriteWorkspaceFileResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
+import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, DailyTokenUsage, DeleteWorkspaceFileResponse, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitActionResponse, GitCommitResponse, GitDiffResponse, GitFileState, GitLogEntry, GitLogResponse, GitStatusFile, GitStatusResponse, Machine, MachineHealth, MachineKind, MachineRuntime, MachineStatus, MessagePage, ModelSelectionResponse, MoveWorkspaceFileResponse, OAuthFlowState, PiPackageInfo, PiPackageInstallResponse, PiPackagesResponse, PiPackageScope, PiWebCapability, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebPluginConfigMap, PiWebPluginInfo, PiWebPluginsResponse, PiWebPluginScope, PiWebReleaseStatus, PiWebRuntimeComponent, PiWebRuntimeResponse, PiWebServiceComponent, PiWebShortcutConfig, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SavedPromptAttachment, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevelsResponse, TokenUsageSummary, TokenUsageSummaryResponse, WriteWorkspaceFileResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
 import { isPiWebCapability } from "../../../shared/capabilities";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -409,6 +409,36 @@ function parseGitFileState(value: unknown): GitFileState {
 export function parseGitDiffResponse(value: unknown): GitDiffResponse {
   const record = requireRecord(value);
   return { ...optionalField("path", optionalString(record, "path")), staged: requireBoolean(record, "staged"), hash: requireString(record, "hash"), diff: requireString(record, "diff"), truncated: requireBoolean(record, "truncated"), ...optionalField("committed", optionalBoolean(record, "committed")) };
+}
+
+export function parseGitActionResponse(value: unknown): GitActionResponse {
+  const record = requireRecord(value);
+  if (record["ok"] !== true) throw new Error("Expected ok git action response");
+  return { ok: true, status: parseGitStatusResponse(record["status"]) };
+}
+
+export function parseGitCommitResponse(value: unknown): GitCommitResponse {
+  const record = requireRecord(value);
+  if (record["ok"] !== true) throw new Error("Expected ok git commit response");
+  return { ok: true, commit: requireString(record, "commit"), summary: requireString(record, "summary"), status: parseGitStatusResponse(record["status"]) };
+}
+
+export function parseGitLogResponse(value: unknown): GitLogResponse {
+  const record = requireRecord(value);
+  return { isGitRepo: requireBoolean(record, "isGitRepo"), ...optionalField("branch", optionalString(record, "branch")), ...optionalField("upstream", optionalString(record, "upstream")), entries: arrayOf(parseGitLogEntry)(record["entries"]) };
+}
+
+function parseGitLogEntry(value: unknown): GitLogEntry {
+  const record = requireRecord(value);
+  return {
+    hash: requireString(record, "hash"),
+    shortHash: requireString(record, "shortHash"),
+    parents: arrayOfString(record["parents"], "parents"),
+    refs: arrayOfString(record["refs"], "refs"),
+    subject: requireString(record, "subject"),
+    authorName: requireString(record, "authorName"),
+    relativeDate: requireString(record, "relativeDate"),
+  };
 }
 
 export function parseTerminalInfo(value: unknown): TerminalInfo {
