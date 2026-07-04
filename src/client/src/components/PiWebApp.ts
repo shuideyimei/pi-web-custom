@@ -33,6 +33,7 @@ import { NavigationSectionsController, type NavigationSection } from "../appShel
 import { PanelCollapseController, mainViewClass } from "../appShell/panelCollapseController";
 import { PanelResizeController, type PanelResizeConstraints, type ResizablePanelSide } from "../appShell/panelResizeController";
 import { readRoute, writeRoute, type AppRoute } from "../route";
+import type { SelectedReviewDiff } from "../reviewDiff";
 import { parseTokenUsageSummary } from "../api/parsers";
 import { readSettingsSection, writeSettingsSection, type SettingsSection } from "../settingsRoute";
 import { applyActiveShortcutPreferences } from "../shortcutPreferences";
@@ -448,6 +449,7 @@ export class PiWebApp extends LitElement {
         mainView: restoredView,
         selectedFilePath: routeSurface.selectedFilePath,
         selectedDiffPath: routeSurface.selectedDiffPath,
+        selectedReviewDiff: undefined,
         selectedTerminalId: routeSurface.selectedTerminalId,
       });
       if (route.projectId === undefined || route.projectId === "") {
@@ -463,13 +465,13 @@ export class PiWebApp extends LitElement {
       }
       const project = this.state.projects.find((p) => p.id === route.projectId);
       if (!project) {
-        this.setState({ selectedFilePath: undefined, selectedDiffPath: undefined, selectedTerminalId: undefined });
+        this.setState({ selectedFilePath: undefined, selectedDiffPath: undefined, selectedReviewDiff: undefined, selectedTerminalId: undefined });
         if (updateUrl) this.updateUrl();
         return;
       }
       await this.workspaces.selectProject(project, { workspaceId: route.workspaceId, sessionId: route.sessionId, updateUrl: false });
       if (!this.isCurrentRouteRestore(restoreSeq)) return;
-      this.setState({ mainView: restoredView, selectedFilePath: routeSurface.selectedFilePath, selectedDiffPath: routeSurface.selectedDiffPath, selectedTerminalId: routeSurface.selectedTerminalId });
+      this.setState({ mainView: restoredView, selectedFilePath: routeSurface.selectedFilePath, selectedDiffPath: routeSurface.selectedDiffPath, selectedReviewDiff: undefined, selectedTerminalId: routeSurface.selectedTerminalId });
       if (routeSurface.selectedTerminalId !== undefined) this.rememberSelectedTerminal(routeSurface.selectedTerminalId);
       await this.refreshRestoredWorkspaceTool(route.tool, routeSurface.selectedFilePath);
       this.git.updatePolling();
@@ -1365,6 +1367,7 @@ export class PiWebApp extends LitElement {
         selectedDiffPath: this.state.selectedDiffPath,
         selectedDiff: this.state.selectedDiff,
         selectedStagedDiff: this.state.selectedStagedDiff,
+        selectedReviewDiff: this.state.selectedReviewDiff,
         gitStale: this.state.gitStale,
         activeTerminalCount: this.state.activeTerminalCount,
         selectedTerminalId: this.state.selectedTerminalId,
@@ -2041,7 +2044,7 @@ export class PiWebApp extends LitElement {
           ${state.error ? html`<div class="error">${state.error}</div>` : null}
           <div class="mobile-navigation-panel">${this.appShell.isMobileNavigationLayout ? this.renderNavigationPanel() : null}</div>
           ${state.mainView === "home" ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading} .onStartSession=${state.selectedWorkspace !== undefined ? () => { void this.sessions.startSession(); } : undefined}></token-usage-dashboard>` : state.selectedSession ? html`
-            ${this.shouldShowSessionUsageDashboard(state) ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading}></token-usage-dashboard>` : html`<chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .workspacePath=${state.selectedWorkspace?.path} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { this.panelCollapse.expandWorkspacePanel(); void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string) => { this.panelCollapse.expandWorkspacePanel(); void this.git.selectDiff(path); }}></chat-view>`}
+            ${this.shouldShowSessionUsageDashboard(state) ? html`<token-usage-dashboard .summary=${state.tokenUsageSummary} .loading=${state.tokenUsageSummaryLoading}></token-usage-dashboard>` : html`<chat-view .sessionId=${state.selectedSession.id} .messages=${state.messages} .messageStart=${state.messagePageStart} .messageEnd=${state.messagePageEnd} .messageTotal=${state.messagePageTotal} .hasMore=${state.messagePageStart > 0} .loadingMore=${state.isLoadingEarlierMessages} .isReceivingPartialStream=${state.isReceivingPartialStream} .isSendingPrompt=${state.sendingPrompts[state.selectedSession.id] === true} .isCompacting=${state.status?.isCompacting === true} .pendingMessageCount=${state.status?.pendingMessageCount ?? 0} .status=${state.status} .activity=${state.activity} .workspacePath=${state.selectedWorkspace?.path} .onLoadMore=${() => this.withChatPrependTransition(() => this.sessions.loadEarlierMessages())} .onOpenWorkspaceFile=${(path: string) => { this.panelCollapse.expandWorkspacePanel(); void this.files.selectFile(path); }} .onReviewWorkspaceFile=${(path: string, reviewDiff?: SelectedReviewDiff) => { this.panelCollapse.expandWorkspacePanel(); void (reviewDiff === undefined ? this.git.selectDiff(path) : this.git.selectReviewDiff(path, reviewDiff)); }}></chat-view>`}
             <prompt-editor .sessionId=${state.selectedSession.id} .cwd=${state.selectedWorkspace?.path} .machineId=${selectedMachineId(state)} .projectId=${state.selectedWorkspace?.projectId} .workspaceId=${state.selectedWorkspace?.id} .workspaceScopedFileSuggestions=${this.supportsWorkspaceFileSuggestions()} .disabled=${state.selectedSession.archived === true} .canSteer=${state.status?.isStreaming === true} .isCompacting=${state.status?.isCompacting === true} .canStop=${canStopSession} .status=${state.status} .availableThinkingLevels=${state.availableThinkingLevels} .sending=${state.sendingPrompts[state.selectedSession.id] === true} .onSend=${(text: string, streamingBehavior?: "steer" | "followUp", attachments?: import("../api").PromptAttachment[], delivery?: import("../../../shared/apiTypes").PromptAttachmentDelivery) => { this.sendPrompt(text, streamingBehavior, attachments, delivery); }} .onStop=${() => this.sessions.stopActiveWork()} .onSelectModel=${() => { void this.openModelDialog(); }} .onSelectThinking=${() => { void this.openThinkingDialog(); }}></prompt-editor>
             ${state.commandDialog !== undefined ? html`<command-picker .title=${state.commandDialog.title} .options=${state.commandDialog.options} .onPick=${(value: string) => this.sessions.respondToCommand(state.commandDialog?.requestId ?? "", value)} .onCancel=${() => { this.sessions.cancelCommand(); }}></command-picker>` : null}
             ${state.modelDialog !== undefined ? html`<command-picker title=${state.modelDialog.title} .searchable=${true} .options=${state.modelDialog.options} .selectedValue=${state.modelDialog.selectedValue} .onPick=${(value: string) => { void this.pickModel(value); }} .onCancel=${() => { this.setState({ modelDialog: undefined }); }}></command-picker>` : null}

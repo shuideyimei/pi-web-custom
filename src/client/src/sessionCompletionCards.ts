@@ -1,3 +1,4 @@
+import type { SelectedReviewDiff } from "./reviewDiff";
 import type { SessionWorkSummary, SessionWorkSummaryFile } from "./sessionWorkSummary";
 
 export interface SessionCompletionArtifactCard {
@@ -10,6 +11,7 @@ export interface SessionCompletionFileRow {
   path: string;
   added?: number;
   removed?: number;
+  reviewDiff?: SelectedReviewDiff;
 }
 
 export interface SessionCompletionEditCard {
@@ -61,7 +63,7 @@ function editCard(files: readonly SessionWorkSummaryFile[], visibleFileCount: nu
 }
 
 function mergeChangedFiles(files: readonly SessionWorkSummaryFile[]): SessionCompletionFileRow[] {
-  const merged = new Map<string, { path: string; added: number; removed: number; hasStats: boolean }>();
+  const merged = new Map<string, { path: string; added: number; removed: number; hasStats: boolean; reviewDiff?: SelectedReviewDiff }>();
   for (const file of files) {
     const current = merged.get(file.path) ?? { path: file.path, added: 0, removed: 0, hasStats: false };
     if (file.added !== undefined || file.removed !== undefined) {
@@ -69,11 +71,13 @@ function mergeChangedFiles(files: readonly SessionWorkSummaryFile[]): SessionCom
       current.removed += file.removed ?? 0;
       current.hasStats = true;
     }
+    if (current.reviewDiff === undefined && file.reviewDiff !== undefined) current.reviewDiff = file.reviewDiff;
     merged.set(file.path, current);
   }
   return [...merged.values()].map((file) => ({
     path: file.path,
     ...(file.hasStats ? { added: file.added, removed: file.removed } : {}),
+    ...(file.reviewDiff === undefined ? {} : { reviewDiff: file.reviewDiff }),
   }));
 }
 

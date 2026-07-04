@@ -1,6 +1,7 @@
 import type { GitFileState, GitStatusResponse, SessionStatus, Workspace } from "./api";
 import type { ChatLine, ChatPart, ToolExecutionPart } from "./components/shared";
 import { workspaceRelativePath } from "./workspacePaths";
+import { createSessionReviewDiff, type SelectedReviewDiff } from "./reviewDiff";
 
 export type SessionWorkSummaryStatus = "idle" | "pending" | "running" | "success" | "error";
 
@@ -14,6 +15,7 @@ export interface SessionWorkSummaryFile extends SessionWorkSummaryLine {
   path: string;
   added?: number;
   removed?: number;
+  reviewDiff?: SelectedReviewDiff;
 }
 
 export interface SessionWorkSummaryCommand extends SessionWorkSummaryLine {
@@ -161,11 +163,14 @@ function fileChangesFromTool(tool: ToolAggregate, workspaceRoot: string | undefi
   const args = toolArgs(tool);
   const path = pathFromArgs(args);
   const diff = diffFromTool(tool);
+  const reviewDiff = reviewDiffFromTool(tool);
+  const reviewChunks = diffFileStats(reviewDiff);
   const perFileStats = diffFileStats(diff);
   const label = fileActionLabel(name);
   if (perFileStats.length > 0) {
     return perFileStats.map((file) => {
       const relativePath = workspaceRelativePath(file.path, workspaceRoot);
+      const snapshot = reviewSnapshotForPath(reviewDiff, reviewChunks, relativePath, workspaceRoot, perFileStats.length === 1);
       return {
         label,
         path: relativePath,
@@ -173,21 +178,25 @@ function fileChangesFromTool(tool: ToolAggregate, workspaceRoot: string | undefi
         status: toolStatus(tool),
         added: file.added,
         removed: file.removed,
+        ...(snapshot === undefined ? {} : { reviewDiff: snapshot }),
       };
     });
   }
   const stats = diffStats(diff);
   if (path === undefined) {
     if (stats === undefined) return [];
-    return [{ label, path: "diff", detail: diffSummary(stats), status: toolStatus(tool), ...stats }];
+    const snapshot = reviewSnapshotForPath(reviewDiff, reviewChunks, "diff", workspaceRoot, true);
+    return [{ label, path: "diff", detail: diffSummary(stats), status: toolStatus(tool), ...stats, ...(snapshot === undefined ? {} : { reviewDiff: snapshot }) }];
   }
   const relativePath = workspaceRelativePath(path, workspaceRoot);
+  const snapshot = reviewSnapshotForPath(reviewDiff, reviewChunks, relativePath, workspaceRoot, true);
   return [{
     label,
     path: relativePath,
     detail: stats === undefined ? relativePath : `${relativePath} · ${diffSummary(stats)}`,
     status: toolStatus(tool),
     ...(stats ?? {}),
+    ...(snapshot === undefined ? {} : { reviewDiff: snapshot }),
   }];
 }
 
@@ -321,6 +330,40 @@ function commandFromArgs(args: unknown): string | undefined {
 
 function diffFromTool(tool: ToolAggregate): string | undefined {
   return stringArg(tool.execution?.details, "diff") ?? stringArg(tool.result?.details, "diff") ?? tool.execution?.preview?.diff;
+}
+
+function reviewDiffFromTool(tool: ToolAggregate): string | undefined {
+  return stringArg(tool.execution?.details, "patch") ?? stringArg(tool.result?.details, "patch") ?? diffFromTool(tool);
+}
+
+function reviewSnapshotForPath(reviewDiff: string | undefined, reviewChunks: readonly { path: string }[], path: string, workspaceRoot: string | undefined, allowWholeDiff: boolean): SelectedReviewDiff | undefined {
+  if (reviewDiff === undefined || reviewDiff === "") return undefined;
+  const matchingChunk = reviewChunks.find((chunk) => workspaceRelativePath(chunk.path, workspaceRoot) === path);
+  if (matchingChunk === undefined && reviewChunks.length > 1 && !allowWholeDiff) return undefined;
+  const diff = matchingChunk === undefined || reviewChunks.length <= 1 ? reviewDiff : extractDiffForPath(reviewDiff, matchingChunk.path) ?? reviewDiff;
+  return createSessionReviewDiff({ path, diff, label: "Saved edit diff" });
+}
+
+function extractDiffForPath(diff: string, path: string): string | undefined {
+  const lines = diff.split("\n");
+  let start = -1;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (line?.startsWith("diff --git ") !== true) continue;
+    if (diffGitPath(line) === path) {
+      start = index;
+      break;
+    }
+  }
+  if (start < 0) return undefined;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index++) {
+    if (lines[index]?.startsWith("diff --git ") === true) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n");
 }
 
 function diffStats(diff: string | undefined): { added: number; removed: number } | undefined {

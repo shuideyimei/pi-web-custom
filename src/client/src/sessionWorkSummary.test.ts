@@ -26,10 +26,10 @@ describe("buildSessionWorkSummary", () => {
     expect(summary.workspace).toBe("pi-web");
     expect(summary.plan).toEqual([{ label: "Current request", detail: "Please fix the menu" }]);
     expect(summary.sources).toEqual([{ label: "Read file", detail: "src/App.ts", status: "success" }]);
-    expect(summary.filesChanged).toEqual([
-      { label: "Edited file", path: "src/App.ts", detail: "src/App.ts · +1 -1", status: "success", added: 1, removed: 1 },
-      { label: "Git change", path: "src/App.ts", detail: "modified · src/App.ts", status: "idle" },
-    ]);
+    expect(summary.filesChanged).toHaveLength(2);
+    expect(summary.filesChanged[0]).toMatchObject({ label: "Edited file", path: "src/App.ts", detail: "src/App.ts · +1 -1", status: "success", added: 1, removed: 1 });
+    expect(summary.filesChanged[0]?.reviewDiff).toMatchObject({ path: "src/App.ts", diff: "-old\n+new", source: "session" });
+    expect(summary.filesChanged[1]).toEqual({ label: "Git change", path: "src/App.ts", detail: "modified · src/App.ts", status: "idle" });
     expect(summary.commandsRun).toEqual([{ label: "Tests passed", command: "npm test", detail: "exit 0", status: "success", exitCode: 0 }]);
     expect(summary.testResults).toHaveLength(1);
     expect(summary.artifacts).toEqual([
@@ -61,9 +61,9 @@ describe("buildSessionWorkSummary", () => {
       selectedWorkspace: { label: "pi-web", path: "/repo" },
     });
 
-    expect(summary.filesChanged).toEqual([
-      { label: "Edited file", path: "src/App.ts", detail: "src/App.ts · +1 -1", status: "success", added: 1, removed: 1 },
-    ]);
+    expect(summary.filesChanged).toHaveLength(1);
+    expect(summary.filesChanged[0]).toMatchObject({ label: "Edited file", path: "src/App.ts", detail: "src/App.ts · +1 -1", status: "success", added: 1, removed: 1 });
+    expect(summary.filesChanged[0]?.reviewDiff).toMatchObject({ path: "src/App.ts", diff: "-old\n+new", source: "session" });
   });
 
   it("splits multi-file diffs into per-file edit counts", () => {
@@ -91,10 +91,27 @@ describe("buildSessionWorkSummary", () => {
       ],
     });
 
-    expect(summary.filesChanged).toEqual([
-      { label: "Edited file", path: "src/a.ts", detail: "src/a.ts · +2 -1", status: "success", added: 2, removed: 1 },
-      { label: "Edited file", path: "src/b.ts", detail: "src/b.ts · +0 -1", status: "success", added: 0, removed: 1 },
-    ]);
+    expect(summary.filesChanged).toHaveLength(2);
+    expect(summary.filesChanged[0]).toMatchObject({ label: "Edited file", path: "src/a.ts", detail: "src/a.ts · +2 -1", status: "success", added: 2, removed: 1 });
+    expect(summary.filesChanged[0]?.reviewDiff).toMatchObject({ path: "src/a.ts", source: "session" });
+    expect(summary.filesChanged[1]).toMatchObject({ label: "Edited file", path: "src/b.ts", detail: "src/b.ts · +0 -1", status: "success", added: 0, removed: 1 });
+    expect(summary.filesChanged[1]?.reviewDiff).toMatchObject({ path: "src/b.ts", source: "session" });
+  });
+
+  it("uses unified patches as saved review diffs when available", () => {
+    const summary = buildSessionWorkSummary({
+      messages: [
+        line("tool", [
+          tool("edit", "success", { path: "src/App.ts" }, { diff: "-old\n+new", patch: "--- a/src/App.ts\n+++ b/src/App.ts\n@@ -1 +1 @@\n-old\n+new" }),
+        ]),
+      ],
+    });
+
+    expect(summary.filesChanged[0]?.reviewDiff).toEqual(expect.objectContaining({
+      path: "src/App.ts",
+      diff: "--- a/src/App.ts\n+++ b/src/App.ts\n@@ -1 +1 @@\n-old\n+new",
+      source: "session",
+    }));
   });
 });
 

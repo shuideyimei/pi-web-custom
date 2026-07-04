@@ -2,6 +2,7 @@ import { api, type GitStatusResponse } from "../api";
 import { queryNamespace, setNamespacedQueryKey } from "../namespacedQueryArgs";
 import { workspaceRelativePath } from "../workspacePaths";
 import { selectedMachineId, type GetState, type SetState, type UpdateUrl } from "./types";
+import type { SelectedReviewDiff } from "../reviewDiff";
 
 const GIT_ROUTE_NAMESPACE = queryNamespace("core:workspace.git");
 
@@ -30,12 +31,13 @@ export class GitController {
       if (selectedDiffPath !== undefined) {
         const diffPath = this.workspaceDiffPath(selectedDiffPath);
         if (diffPath !== selectedDiffPath) {
-          this.setState({ selectedDiffPath: diffPath });
+          const selectedReviewDiff = this.getState().selectedReviewDiff;
+          this.setState({ selectedDiffPath: diffPath, ...(selectedReviewDiff === undefined ? {} : { selectedReviewDiff: { ...selectedReviewDiff, path: diffPath } }) });
           setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", diffPath, { replace: true });
         }
         if (status.isGitRepo) await this.refreshDiff(diffPath);
         else {
-          this.setState({ selectedDiffPath: undefined, selectedDiff: undefined, selectedStagedDiff: undefined, gitLog });
+          this.setState({ selectedDiffPath: undefined, selectedDiff: undefined, selectedStagedDiff: undefined, selectedReviewDiff: undefined, gitLog });
           setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", undefined, { replace: true });
         }
       }
@@ -46,7 +48,22 @@ export class GitController {
 
   async selectDiff(path: string): Promise<void> {
     const diffPath = this.workspaceDiffPath(path);
-    this.setState({ selectedDiffPath: diffPath, selectedDiff: undefined, selectedStagedDiff: undefined, workspaceTool: "core:workspace.git", mainView: this.getState().mainView === "chat" ? "chat" : "core:workspace.git" });
+    this.setState({ selectedDiffPath: diffPath, selectedDiff: undefined, selectedStagedDiff: undefined, selectedReviewDiff: undefined, workspaceTool: "core:workspace.git", mainView: this.getState().mainView === "chat" ? "chat" : "core:workspace.git" });
+    setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", diffPath);
+    this.updateUrl({ replace: true });
+    await this.refreshDiff(diffPath);
+  }
+
+  async selectReviewDiff(path: string, reviewDiff: SelectedReviewDiff): Promise<void> {
+    const diffPath = this.workspaceDiffPath(path);
+    this.setState({
+      selectedDiffPath: diffPath,
+      selectedDiff: undefined,
+      selectedStagedDiff: undefined,
+      selectedReviewDiff: { ...reviewDiff, path: diffPath },
+      workspaceTool: "core:workspace.git",
+      mainView: this.getState().mainView === "chat" ? "chat" : "core:workspace.git",
+    });
     setNamespacedQueryKey(GIT_ROUTE_NAMESPACE, "diff", diffPath);
     this.updateUrl({ replace: true });
     await this.refreshDiff(diffPath);
@@ -54,7 +71,7 @@ export class GitController {
 
   async restoreDiff(path: string): Promise<void> {
     const diffPath = this.workspaceDiffPath(path);
-    this.setState({ selectedDiffPath: diffPath, selectedDiff: undefined, selectedStagedDiff: undefined });
+    this.setState({ selectedDiffPath: diffPath, selectedDiff: undefined, selectedStagedDiff: undefined, selectedReviewDiff: undefined });
     await this.refreshDiff(diffPath);
   }
 

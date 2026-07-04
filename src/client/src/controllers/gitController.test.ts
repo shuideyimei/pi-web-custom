@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, type GitDiffResponse, type GitStatusResponse, type Project, type Workspace } from "../api";
 import { initialAppState, type AppState } from "../appState";
 import { GitController } from "./gitController";
+import { createSessionReviewDiff } from "../reviewDiff";
 
 const originalWindow = globalThis.window;
 
@@ -48,9 +49,27 @@ describe("GitController", () => {
     expect(harness.state.selectedStagedDiff).toEqual(stagedDiff);
   });
 
+  it("opens a saved review diff while still refreshing live git diffs", async () => {
+    installWindowStub();
+    const harness = createHarness();
+    const reviewDiff = createSessionReviewDiff({ path: "src/App.ts", diff: "-old\n+new" });
+    const unstagedDiff = diffResponse({ path: "src/App.ts" });
+    const stagedDiff = diffResponse({ path: "src/App.ts", staged: true });
+    vi.spyOn(api, "gitDiff")
+      .mockResolvedValueOnce(unstagedDiff)
+      .mockResolvedValueOnce(stagedDiff);
+
+    await harness.controller.selectReviewDiff("src/App.ts", reviewDiff);
+
+    expect(harness.state.selectedDiffPath).toBe("src/App.ts");
+    expect(harness.state.selectedReviewDiff).toEqual(reviewDiff);
+    expect(harness.state.selectedDiff).toEqual(unstagedDiff);
+    expect(harness.state.selectedStagedDiff).toEqual(stagedDiff);
+  });
+
   it("clears selected diffs when the workspace is no longer a git repository", async () => {
     installWindowStub();
-    const harness = createHarness({ selectedDiffPath: "src/App.ts", selectedDiff: diffResponse({ path: "src/App.ts" }), selectedStagedDiff: diffResponse({ path: "src/App.ts", staged: true }) });
+    const harness = createHarness({ selectedDiffPath: "src/App.ts", selectedDiff: diffResponse({ path: "src/App.ts" }), selectedStagedDiff: diffResponse({ path: "src/App.ts", staged: true }), selectedReviewDiff: createSessionReviewDiff({ path: "src/App.ts", diff: "-old\n+new" }) });
     vi.spyOn(api, "gitStatus").mockResolvedValue({ isGitRepo: false, hash: "not-git", files: [] });
     vi.spyOn(api, "gitLog").mockResolvedValue({ isGitRepo: false, entries: [] });
     const gitDiff = vi.spyOn(api, "gitDiff");
@@ -61,6 +80,7 @@ describe("GitController", () => {
     expect(harness.state.selectedDiffPath).toBeUndefined();
     expect(harness.state.selectedDiff).toBeUndefined();
     expect(harness.state.selectedStagedDiff).toBeUndefined();
+    expect(harness.state.selectedReviewDiff).toBeUndefined();
   });
 });
 

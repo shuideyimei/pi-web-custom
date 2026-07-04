@@ -617,6 +617,7 @@ function createWorkspacePanelContext(machineId: string, prompt: WorkspacePanelCo
     selectedDiffPath: undefined,
     selectedDiff: undefined,
     selectedStagedDiff: undefined,
+    selectedReviewDiff: undefined,
     gitStale: false,
     activeTerminalCount: 0,
     selectedTerminalId: undefined,

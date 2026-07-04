@@ -4,6 +4,7 @@ import type { DeleteWorkspaceFileResponse, FileContentResponse, FileTreeEntry, G
 import type { AppState } from "../appState";
 import type { SettingsSection } from "../settingsRoute";
 import type { LocalContributionId, PluginId, QualifiedContributionId } from "./ids";
+import type { SelectedReviewDiff } from "../reviewDiff";
 
 export type { LocalContributionId, PluginId, QualifiedContributionId } from "./ids";
 export type HtmlTemplateTag = (strings: TemplateStringsArray, ...values: unknown[]) => TemplateResult;
@@ -156,6 +157,7 @@ export interface WorkspacePanelContext extends WorkspaceContext {
   selectedDiffPath: string | undefined;
   selectedDiff: GitDiffResponse | undefined;
   selectedStagedDiff: GitDiffResponse | undefined;
+  selectedReviewDiff: SelectedReviewDiff | undefined;
   gitStale: boolean;
   activeTerminalCount: number;
   selectedTerminalId: string | undefined;

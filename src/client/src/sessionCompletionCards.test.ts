@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSessionCompletionCards } from "./sessionCompletionCards";
+import { createSessionReviewDiff } from "./reviewDiff";
 import type { SessionWorkSummary } from "./sessionWorkSummary";
 
 describe("buildSessionCompletionCards", () => {
@@ -16,9 +17,10 @@ describe("buildSessionCompletionCards", () => {
   });
 
   it("merges changed files and folds extra rows", () => {
+    const reviewDiff = createSessionReviewDiff({ path: "src/a.ts", diff: "-old\n+new" });
     const cards = buildSessionCompletionCards(summary({
       filesChanged: [
-        { label: "Edited file", path: "src/a.ts", added: 2, removed: 1 },
+        { label: "Edited file", path: "src/a.ts", added: 2, removed: 1, reviewDiff },
         { label: "Git change", path: "src/a.ts" },
         { label: "Edited file", path: "src/b.ts", added: 3, removed: 0 },
         { label: "Edited file", path: "src/c.ts", added: 0, removed: 4 },
@@ -31,7 +33,7 @@ describe("buildSessionCompletionCards", () => {
       added: 10,
       removed: 5,
       visibleFiles: [
-        { path: "src/a.ts", added: 2, removed: 1 },
+        { path: "src/a.ts", added: 2, removed: 1, reviewDiff },
         { path: "src/b.ts", added: 3, removed: 0 },
         { path: "src/c.ts", added: 0, removed: 4 },
       ],

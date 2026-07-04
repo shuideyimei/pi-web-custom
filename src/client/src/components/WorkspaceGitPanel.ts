@@ -2,6 +2,7 @@ import { css, html, LitElement, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { GitDiffResponse, GitFileState, GitLogEntry, GitStatusResponse } from "../api";
 import type { WorkspacePanelContext } from "../plugins/types";
+import type { SelectedReviewDiff } from "../reviewDiff";
 import { workspacePanelStyles } from "./shared";
 
 type GitStatusFile = GitStatusResponse["files"][number];
@@ -232,13 +233,20 @@ export class WorkspaceGitPanel extends LitElement {
 
   private renderDiffViewer(context: WorkspacePanelContext): TemplateResult {
     if (context.selectedDiffPath === undefined || context.selectedDiffPath === "") return html`<p class="muted git-empty">Select a changed file.</p>`;
+    const review = context.selectedReviewDiff;
     const unstaged = context.selectedDiff;
     const staged = context.selectedStagedDiff;
-    if (unstaged === undefined || staged === undefined) return html`<p class="muted git-empty">Loading diff…</p>`;
-    const diffs = [staged, unstaged].filter((diff) => diff.diff !== "");
+    if (review === undefined && (unstaged === undefined || staged === undefined)) return html`<p class="muted git-empty">Loading diff…</p>`;
+    const liveDiffs = [staged, unstaged].filter((diff): diff is GitDiffResponse => diff !== undefined && diff.diff !== "" && (review === undefined || diff.committed !== true));
+    const diffs = [review, ...liveDiffs].filter((diff): diff is GitDiffResponse | SelectedReviewDiff => diff !== undefined && diff.diff !== "");
     if (diffs.length === 0) return html`<p class="muted git-empty">No staged or unstaged diff.</p>`;
+    const liveDiffLoaded = staged !== undefined && unstaged !== undefined;
+    const hasCurrentWorkspaceDiff = [staged, unstaged].some((diff) => diff !== undefined && diff.diff !== "" && diff.committed !== true);
     return html`
       <div class=${diffs.length === 1 ? "diffs single" : "diffs"}>
+        ${review !== undefined && liveDiffLoaded && !hasCurrentWorkspaceDiff ? html`
+          <p class="review-note">Working tree is clean. Showing the saved diff from this session.</p>
+        ` : null}
         ${diffs.map((diff) => renderDiffSection(diff))}
       </div>
     `;
@@ -422,19 +430,35 @@ export class WorkspaceGitPanel extends LitElement {
       .empty-note { margin: 10px 0; }
       .git-empty { margin: auto; padding: 24px; text-align: center; }
       .diffs { overflow: auto; }
+      .review-note { margin: 0; border-bottom: 1px solid var(--pi-border-muted); background: color-mix(in srgb, var(--pi-info-bg) 72%, transparent); color: var(--pi-info); padding: 10px 18px; font-size: 13px; }
     `,
   ];
 }
 
-function renderDiffSection(diff: GitDiffResponse): TemplateResult {
+function renderDiffSection(diff: GitDiffResponse | SelectedReviewDiff): TemplateResult {
   loadUnifiedDiffViewer();
-  const statusLabel = diff.committed === true ? "committed" : diff.staged ? "staged" : "unstaged";
+  const statusLabel = diffStatusLabel(diff);
+  const statusClass = diffStatusClass(diff);
   return html`
     <section class="diff-section">
-      <div class="viewer-header"><strong>${diff.path ?? "diff"}</strong><small class=${`diff-status ${statusLabel}`}>${statusLabel}${diff.truncated ? " · truncated" : ""}</small></div>
+      <div class="viewer-header"><strong>${diff.path ?? "diff"}</strong><small class=${`diff-status ${statusClass}`}>${statusLabel}${diff.truncated ? " · truncated" : ""}</small></div>
       <unified-diff-viewer .diff=${diff.diff}></unified-diff-viewer>
     </section>
   `;
+}
+
+function diffStatusLabel(diff: GitDiffResponse | SelectedReviewDiff): string {
+  if (isSelectedReviewDiff(diff)) return diff.label ?? "saved edit";
+  return diff.committed === true ? "committed" : diff.staged ? "staged" : "unstaged";
+}
+
+function diffStatusClass(diff: GitDiffResponse | SelectedReviewDiff): string {
+  if (isSelectedReviewDiff(diff)) return "session";
+  return diff.committed === true ? "committed" : diff.staged ? "staged" : "unstaged";
+}
+
+function isSelectedReviewDiff(diff: GitDiffResponse | SelectedReviewDiff): diff is SelectedReviewDiff {
+  return "source" in diff;
 }
 
 function loadUnifiedDiffViewer(): void {

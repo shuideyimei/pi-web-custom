@@ -3,6 +3,7 @@ import type { ChatLine } from "./components/shared";
 import type { QualifiedContributionId } from "./plugins/ids";
 import type { WorkspaceUploadBatchState } from "./workspaceUploadState";
 import type { ToastItem } from "./components/ToastContainer";
+import type { SelectedReviewDiff } from "./reviewDiff";
 
 export interface AppState {
   machines: Machine[];
@@ -59,6 +60,7 @@ export interface AppState {
   selectedDiffPath: string | undefined;
   selectedDiff: GitDiffResponse | undefined;
   selectedStagedDiff: GitDiffResponse | undefined;
+  selectedReviewDiff: SelectedReviewDiff | undefined;
   gitStale: boolean;
   activeTerminalCount: number;
   selectedTerminalId: string | undefined;
@@ -88,6 +90,7 @@ export type WorkspaceScopedStateReset = Pick<AppState,
   | "selectedDiffPath"
   | "selectedDiff"
   | "selectedStagedDiff"
+  | "selectedReviewDiff"
   | "gitStale"
   | "selectedTerminalId"
   | "error"
@@ -106,6 +109,7 @@ export function resetWorkspaceScopedState(): WorkspaceScopedStateReset {
     selectedDiffPath: undefined,
     selectedDiff: undefined,
     selectedStagedDiff: undefined,
+    selectedReviewDiff: undefined,
     gitStale: false,
     selectedTerminalId: undefined,
     error: "",
@@ -165,6 +169,7 @@ export function initialAppState(): AppState {
     selectedDiffPath: undefined,
     selectedDiff: undefined,
     selectedStagedDiff: undefined,
+    selectedReviewDiff: undefined,
     gitStale: false,
     activeTerminalCount: 0,
     selectedTerminalId: undefined,

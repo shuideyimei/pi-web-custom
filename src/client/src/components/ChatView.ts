@@ -7,6 +7,7 @@ import { shouldRequestEarlierMessages } from "../chatHistoryLoading";
 import { ChatScrollController, distanceFromScrollBottom, findFirstVisibleArticle, isNearScrollBottom, type ChatAnchorScrollPosition, type ChatScrollRestoreResult } from "../chatScrollPosition";
 import type { SessionActivity, SessionStatus } from "../api";
 import { buildSessionCompletionCards, type SessionCompletionArtifactCard, type SessionCompletionEditCard, type SessionCompletionFileRow } from "../sessionCompletionCards";
+import type { SelectedReviewDiff } from "../reviewDiff";
 import { buildSessionWorkSummary, type SessionWorkSummary } from "../sessionWorkSummary";
 import type { ChatLine, ChatPart } from "./shared";
 import { assistantCompletionFooterKeys } from "./assistantCompletionFooter";
@@ -73,7 +74,7 @@ export class ChatView extends LitElement {
   @property({ attribute: false }) workspacePath?: string;
   @property({ attribute: false }) onLoadMore?: () => void;
   @property({ attribute: false }) onOpenWorkspaceFile?: (path: string) => void;
-  @property({ attribute: false }) onReviewWorkspaceFile?: (path: string) => void;
+  @property({ attribute: false }) onReviewWorkspaceFile?: (path: string, reviewDiff?: SelectedReviewDiff) => void;
   @query(".chat") private chat?: HTMLDivElement;
   @state() private pinnedToBottom = true;
   @state() private expandedMetaKey: string | undefined;
@@ -484,7 +485,7 @@ export class ChatView extends LitElement {
   }
 
   private renderEditCard(nodeKey: string, card: SessionCompletionEditCard) {
-    const reviewPath = card.visibleFiles[0]?.path;
+    const reviewFile = card.visibleFiles[0];
     const expanded = this.expandedCompletionFileLists[nodeKey] === true;
     return html`
       <section class="tl-edit-card" aria-label=${card.title}>
@@ -494,8 +495,8 @@ export class ChatView extends LitElement {
             <strong>${card.title}</strong>
             ${this.renderStats(card.added, card.removed)}
           </span>
-          ${reviewPath === undefined ? null : html`
-            <button class="tl-work-action" type="button" ?disabled=${this.onReviewWorkspaceFile === undefined} @click=${() => { this.onReviewWorkspaceFile?.(reviewPath); }}>Review</button>
+          ${reviewFile === undefined ? null : html`
+            <button class="tl-work-action" type="button" ?disabled=${this.onReviewWorkspaceFile === undefined} @click=${() => { this.onReviewWorkspaceFile?.(reviewFile.path, reviewFile.reviewDiff); }}>Review</button>
           `}
         </header>
         <ul class="tl-edit-file-list">
@@ -534,7 +535,7 @@ export class ChatView extends LitElement {
     if (this.onReviewWorkspaceFile === undefined) return html`<li class="tl-edit-file-row">${content}</li>`;
     return html`
       <li>
-        <button class="tl-edit-file-row tl-edit-file-button" type="button" @click=${() => { this.onReviewWorkspaceFile?.(file.path); }}>${content}</button>
+        <button class="tl-edit-file-row tl-edit-file-button" type="button" @click=${() => { this.onReviewWorkspaceFile?.(file.path, file.reviewDiff); }}>${content}</button>
       </li>
     `;
   }

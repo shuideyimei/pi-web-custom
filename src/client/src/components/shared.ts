@@ -236,7 +236,7 @@ export const workspacePanelStyles = css`
   .viewer-header { position: sticky; top: 0; display: flex; justify-content: space-between; gap: 8px; padding: 8px; border-bottom: 1px solid var(--pi-border-muted); background: var(--pi-bg); }
   .viewer-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .diff-status { text-transform: uppercase; font-size: 10px; letter-spacing: .04em; border: 1px solid var(--pi-border-muted); border-radius: 999px; padding: 1px 6px; color: var(--pi-muted); }
-  .diff-status.committed { border-color: var(--pi-info-border); color: var(--pi-info); }
+  .diff-status.committed, .diff-status.session { border-color: var(--pi-info-border); color: var(--pi-info); }
   .diff-status.staged { border-color: var(--pi-success-border); color: var(--pi-success); }
   .diff-status.unstaged { border-color: var(--pi-warning-border); color: var(--pi-warning); }
   code-viewer, unified-diff-viewer { flex: 1 1 auto; min-height: 0; }
