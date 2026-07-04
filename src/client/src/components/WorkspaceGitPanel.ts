@@ -1,4 +1,4 @@
-import { css, html, LitElement, type TemplateResult } from "lit";
+import { css, html, LitElement, svg, type SVGTemplateResult, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { GitDiffResponse, GitFileState, GitLogEntry, GitStatusResponse } from "../api";
 import type { WorkspacePanelContext } from "../plugins/types";
@@ -76,14 +76,17 @@ export class WorkspaceGitPanel extends LitElement {
     const busy = this.pendingAction !== undefined;
     return html`
       <section class="git-toolbar" aria-label="Source control actions">
-        <div class="git-toolbar-title">
-          <strong>Source Control</strong>
-          ${context.gitStale ? html`<span class="stale">stale</span>` : null}
-        </div>
-        <div class="git-toolbar-actions">
-          <button type="button" title="Stage all changes" aria-label="Stage all changes" ?disabled=${!stageable || busy} @click=${() => { void this.runAction("stage-all", () => { return context.onStageAllGitFiles(); }); }}>✓</button>
-          <button type="button" title="Unstage all changes" aria-label="Unstage all changes" ?disabled=${!staged || busy} @click=${() => { void this.runAction("unstage-all", () => { return context.onUnstageAllGitFiles(); }); }}>↶</button>
-          <button type="button" title="Refresh Git" aria-label="Refresh Git" ?disabled=${busy} @click=${() => { void this.runAction("refresh", () => { context.onRefreshGit(); }); }}>↻</button>
+        <div class="git-section-header">
+          <div class="git-section-title">
+            ${renderIcon("chevron-down", "git-section-chevron")}
+            <strong>Changes</strong>
+            ${context.gitStale ? html`<span class="stale">stale</span>` : null}
+          </div>
+          <div class="git-toolbar-actions">
+            <button class="git-icon-button" type="button" title="Stage all changes" aria-label="Stage all changes" ?disabled=${!stageable || busy} @click=${() => { void this.runAction("stage-all", () => { return context.onStageAllGitFiles(); }); }}>${renderIcon("check")}</button>
+            <button class="git-icon-button" type="button" title="Unstage all changes" aria-label="Unstage all changes" ?disabled=${!staged || busy} @click=${() => { void this.runAction("unstage-all", () => { return context.onUnstageAllGitFiles(); }); }}>${renderIcon("undo")}</button>
+            <button class="git-icon-button" type="button" title="Refresh Git" aria-label="Refresh Git" ?disabled=${busy} @click=${() => { void this.runAction("refresh", () => { context.onRefreshGit(); }); }}>${renderIcon("refresh")}</button>
+          </div>
         </div>
       </section>
     `;
@@ -94,17 +97,21 @@ export class WorkspaceGitPanel extends LitElement {
     const canCommit = stagedCount > 0 && this.commitMessage.trim() !== "" && this.pendingAction === undefined;
     return html`
       <form class="commit-box" @submit=${(event: SubmitEvent) => { this.handleCommitSubmit(event, context); }}>
-        <input
-          type="text"
-          placeholder=${stagedCount === 0 ? "Stage changes before committing" : "Message (⌘Enter to commit)"}
-          autocomplete="off"
-          spellcheck="true"
-          .value=${this.commitMessage}
-          @input=${this.handleCommitInput}
-          @keydown=${(event: KeyboardEvent) => { this.handleCommitKeyDown(event, context); }}
-        />
+        <label class="commit-input-wrapper">
+          <span class="sr-only">Commit message</span>
+          <input
+            type="text"
+            placeholder=${stagedCount === 0 ? "Stage changes before committing" : "Message (⌘Enter to commit)"}
+            autocomplete="off"
+            spellcheck="true"
+            .value=${this.commitMessage}
+            @input=${this.handleCommitInput}
+            @keydown=${(event: KeyboardEvent) => { this.handleCommitKeyDown(event, context); }}
+          />
+          <span class="commit-input-icon" aria-hidden="true">${renderIcon("sparkles")}</span>
+        </label>
         <button class="commit-button" type="submit" ?disabled=${!canCommit}>
-          <span aria-hidden="true">✓</span>
+          ${renderIcon("check")}
           <span>${this.pendingAction === "commit" ? "Committing…" : stagedCount === 0 ? "Commit staged changes" : `Commit ${String(stagedCount)} staged`}</span>
         </button>
         ${this.actionError === "" ? null : html`<p class="action-error" role="alert">${this.actionError}</p>`}
@@ -156,7 +163,7 @@ export class WorkspaceGitPanel extends LitElement {
       <section class="git-files" aria-label="Changed files">
         <div class="section-heading">
           <button class="section-toggle" type="button" aria-expanded="true">
-            <span>Changes</span>
+            <span class="section-toggle-title">${renderIcon("chevron-down", "git-section-chevron")}<span>Changes</span></span>
             <span class="count-badge">${String(status.files.length)}</span>
           </button>
         </div>
@@ -186,8 +193,8 @@ export class WorkspaceGitPanel extends LitElement {
           </span>
         </button>
         <div class="git-file-actions" aria-label=${`Actions for ${file.path}`}>
-          ${stageable ? html`<button type="button" title="Stage change" aria-label=${`Stage ${file.path}`} ?disabled=${busy} @click=${(event: MouseEvent) => { this.stageFile(event, context, file.path); }}>＋</button>` : null}
-          ${staged ? html`<button type="button" title="Unstage change" aria-label=${`Unstage ${file.path}`} ?disabled=${busy} @click=${(event: MouseEvent) => { this.unstageFile(event, context, file.path); }}>↶</button>` : null}
+          ${stageable ? html`<button class="git-icon-button small" type="button" title="Stage change" aria-label=${`Stage ${file.path}`} ?disabled=${busy} @click=${(event: MouseEvent) => { this.stageFile(event, context, file.path); }}>${renderIcon("plus")}</button>` : null}
+          ${staged ? html`<button class="git-icon-button small" type="button" title="Unstage change" aria-label=${`Unstage ${file.path}`} ?disabled=${busy} @click=${(event: MouseEvent) => { this.unstageFile(event, context, file.path); }}>${renderIcon("undo")}</button>` : null}
         </div>
       </div>
     `;
@@ -195,11 +202,19 @@ export class WorkspaceGitPanel extends LitElement {
 
   private renderGraph(context: WorkspacePanelContext): TemplateResult {
     const gitLog = context.gitLog;
+    const branch = gitLog?.branch ?? context.gitStatus?.branch ?? "detached";
+    const busy = this.pendingAction !== undefined;
     return html`
       <section class="git-graph" aria-label="Git graph">
-        <div class="graph-header">
-          <strong>Graph</strong>
-          <span>${gitLog?.branch ?? context.gitStatus?.branch ?? "detached"}</span>
+        <div class="git-section-header graph-header">
+          <div class="git-section-title">
+            ${renderIcon("chevron-down", "git-section-chevron")}
+            <strong>Graph</strong>
+          </div>
+          <div class="graph-toolbar" aria-label="Graph controls">
+            <span class="graph-branch-tool" title=${branch}>${renderIcon("branch")}<span>${branch}</span></span>
+            <button class="git-icon-button" type="button" title="Refresh Git" aria-label="Refresh Git" ?disabled=${busy} @click=${() => { void this.runAction("refresh-graph", () => { context.onRefreshGit(); }); }}>${renderIcon("refresh")}</button>
+          </div>
         </div>
         ${gitLog === undefined ? html`
           <p class="muted empty-note">No history loaded.</p>
@@ -357,6 +372,7 @@ export class WorkspaceGitPanel extends LitElement {
     workspacePanelStyles,
     css`
       :host { flex: 1 1 auto; min-height: 0; border-left: 0; box-shadow: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
       .git-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
       .git-sidebar-split { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 8px minmax(0, var(--git-details-panel-width, 300px)); }
       .git-diff-viewer { min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; background: var(--pi-main-bg); }
@@ -365,18 +381,29 @@ export class WorkspaceGitPanel extends LitElement {
       .git-sidebar-split-divider::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); background: var(--pi-border-muted); transition: width .12s ease, background .12s ease; }
       .git-sidebar-split-divider:hover::after, .git-sidebar-split-divider:focus-visible::after, :host([resizing]) .git-sidebar-split-divider::after { width: 3px; background: var(--pi-accent); }
       .git-details-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-left: 0; background: transparent; }
-      .git-toolbar { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 12px 8px; border-bottom: 1px solid var(--pi-border-muted); background: transparent; }
-      .git-toolbar-title { min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--pi-muted); letter-spacing: .08em; text-transform: uppercase; }
-      .git-toolbar-title strong { color: var(--pi-muted); font-size: 12px; }
-      .git-toolbar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
-      .git-toolbar button, .git-file-actions button { margin-left: 0; border-color: transparent; border-radius: 10px; background: transparent; color: var(--pi-muted); min-height: 30px; min-width: 30px; justify-content: center; padding: 4px 7px; font-weight: 750; }
-      .git-toolbar button:hover:not(:disabled), .git-file-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--pi-text) 9%, transparent); color: var(--pi-text-bright); }
+      .git-toolbar { flex: 0 0 auto; border-bottom: 1px solid var(--pi-border-muted); background: transparent; }
+      .git-section-header { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 10px 4px 0; color: var(--pi-muted); }
+      .git-section-title { min-width: 0; display: flex; align-items: center; gap: 4px; color: var(--pi-muted); letter-spacing: .04em; text-transform: uppercase; }
+      .git-section-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-muted); font-size: 13px; font-weight: 700; line-height: 24px; }
+      .git-section-chevron { --git-icon-size: 22px; margin-left: 0; color: var(--pi-text-secondary); }
+      .git-toolbar-actions, .graph-toolbar { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; color: var(--pi-text-secondary); }
+      .git-icon { width: var(--git-icon-size, 20px); height: var(--git-icon-size, 20px); display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+      .git-icon-button { box-sizing: border-box; width: 28px; height: 28px; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; margin: 0; border: 0; border-radius: 5px; background: transparent; color: var(--pi-text-secondary); padding: 0; line-height: 1; }
+      .git-icon-button .git-icon { --git-icon-size: 22px; }
+      .git-icon-button.small { width: 24px; height: 24px; min-width: 24px; min-height: 24px; border-radius: 5px; }
+      .git-icon-button.small .git-icon { --git-icon-size: 18px; }
+      .git-icon-button:hover:not(:disabled) { background: color-mix(in srgb, var(--pi-text) 9%, transparent); color: var(--pi-text-bright); }
+      .git-icon-button:disabled { opacity: .38; }
       .git-details-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px; }
       .commit-box { display: grid; gap: 9px; margin: 0 0 14px; }
-      .commit-box input { box-sizing: border-box; width: 100%; border: 1px solid color-mix(in srgb, var(--pi-accent) 80%, var(--pi-border-muted)); border-radius: 9px; background: color-mix(in srgb, var(--pi-bg) 80%, transparent); color: var(--pi-text); padding: 10px 12px; outline: none; font: inherit; }
-      .commit-box input:focus { border-color: var(--pi-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pi-accent) 18%, transparent); }
-      .commit-box input::placeholder { color: var(--pi-muted); }
-      .commit-button { width: 100%; min-height: 40px; justify-content: center; border: 0; border-radius: 9px; background: var(--pi-accent); color: var(--pi-bg); font-size: 15px; font-weight: 750; }
+      .commit-input-wrapper { position: relative; display: block; }
+      .commit-box input { box-sizing: border-box; width: 100%; min-height: 36px; border: 1px solid color-mix(in srgb, var(--pi-accent) 85%, var(--pi-border-muted)); border-radius: 6px; background: color-mix(in srgb, var(--pi-bg) 82%, transparent); color: var(--pi-text); padding: 5px 38px 5px 12px; outline: none; font: inherit; font-size: 15px; line-height: 24px; }
+      .commit-box input:focus { border-color: var(--pi-accent); box-shadow: 0 0 0 1px var(--pi-accent) inset; }
+      .commit-box input::placeholder { color: var(--pi-muted); opacity: .86; }
+      .commit-input-icon { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); color: var(--pi-muted); pointer-events: none; }
+      .commit-input-icon .git-icon { --git-icon-size: 20px; stroke-width: 1.7; }
+      .commit-button { width: 100%; min-height: 40px; display: inline-flex; align-items: center; gap: 8px; justify-content: center; border: 0; border-radius: 6px; background: var(--pi-accent); color: var(--pi-bg); font-size: 15px; font-weight: 650; }
+      .commit-button .git-icon { --git-icon-size: 22px; stroke-width: 1.9; }
       .commit-button:hover:not(:disabled), .commit-button:focus-visible:not(:disabled) { filter: brightness(1.05); background: var(--pi-accent); }
       .commit-button:disabled { opacity: .55; }
       .action-error { margin: 0; border: 1px solid color-mix(in srgb, var(--pi-danger) 60%, var(--pi-border-muted)); border-radius: 10px; background: color-mix(in srgb, var(--pi-danger) 10%, transparent); color: var(--pi-danger); padding: 8px 10px; line-height: 1.35; overflow-wrap: anywhere; }
@@ -392,8 +419,8 @@ export class WorkspaceGitPanel extends LitElement {
       .card-note { margin: 0; }
       .section-heading { margin: 0 0 5px; }
       .section-toggle { width: 100%; min-height: 34px; display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; color: var(--pi-text); padding: 0; font-size: 18px; font-weight: 650; }
-      .section-toggle::before { content: "⌄"; color: var(--pi-muted); margin-right: 8px; }
-      .section-toggle span:first-child { flex: 1 1 auto; min-width: 0; text-align: left; }
+      .section-toggle-title { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 4px; text-align: left; }
+      .section-toggle-title > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .count-badge { flex: 0 0 auto; display: inline-grid; place-items: center; min-width: 24px; min-height: 24px; border-radius: 999px; background: color-mix(in srgb, var(--pi-text) 14%, transparent); color: var(--pi-muted); padding: 0 7px; font-size: 13px; }
       .git-file-list { display: grid; gap: 1px; margin: 0 0 14px; }
       .git-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; min-height: 38px; border-radius: 8px; color: var(--pi-text); }
@@ -403,17 +430,19 @@ export class WorkspaceGitPanel extends LitElement {
       .git-file-text { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
       .git-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
       .git-file-text small { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-muted); font-size: 12px; }
-      .git-file-actions { flex: 0 0 auto; display: flex; align-items: center; padding-right: 4px; opacity: .72; }
+      .git-file-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; padding-right: 4px; opacity: .72; }
       .git-file-row:hover .git-file-actions, .git-file-row.selected .git-file-actions { opacity: 1; }
       .state-pill { box-sizing: border-box; min-width: 22px; justify-self: center; display: inline-flex; justify-content: center; color: var(--pi-muted); font-size: 12px; font-weight: 800; line-height: 18px; }
       .state-pill.modified, .state-pill.renamed, .state-pill.copied { color: var(--pi-warning); }
       .state-pill.added, .state-pill.untracked { color: var(--pi-success); }
       .state-pill.deleted { color: var(--pi-danger); }
       .state-pill.conflicted { color: var(--pi-danger); }
-      .git-graph { margin-top: 16px; border-top: 1px solid var(--pi-border-muted); padding-top: 10px; }
-      .graph-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: var(--pi-muted); letter-spacing: .08em; text-transform: uppercase; }
-      .graph-header strong { color: var(--pi-muted); font-size: 12px; }
-      .graph-header span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-text); font-size: 12px; letter-spacing: 0; text-transform: none; }
+      .git-graph { margin-top: 16px; border-top: 1px solid var(--pi-border-muted); padding-top: 4px; }
+      .graph-header { margin-bottom: 7px; padding-right: 0; }
+      .graph-toolbar { flex: 1 1 auto; min-width: 0; justify-content: flex-end; gap: 2px; }
+      .graph-branch-tool { min-width: 0; max-width: 74px; height: 28px; display: inline-flex; align-items: center; gap: 5px; color: var(--pi-text-secondary); font-size: 13px; font-weight: 600; line-height: 1; text-transform: none; letter-spacing: 0; }
+      .graph-branch-tool .git-icon { --git-icon-size: 22px; }
+      .graph-branch-tool span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .graph-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
       .graph-entry { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); min-height: 28px; }
       .graph-line { position: relative; display: grid; justify-items: center; }
@@ -433,6 +462,21 @@ export class WorkspaceGitPanel extends LitElement {
       .review-note { margin: 0; border-bottom: 1px solid var(--pi-border-muted); background: color-mix(in srgb, var(--pi-info-bg) 72%, transparent); color: var(--pi-info); padding: 10px 18px; font-size: 13px; }
     `,
   ];
+}
+
+type GitIconName = "branch" | "check" | "chevron-down" | "plus" | "refresh" | "sparkles" | "undo";
+
+function renderIcon(name: GitIconName, className = ""): SVGTemplateResult {
+  const classes = className === "" ? "git-icon" : `git-icon ${className}`;
+  switch (name) {
+    case "branch": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="6" cy="5" r="2.5"></circle><circle cx="6" cy="19" r="2.5"></circle><circle cx="18" cy="12" r="2.5"></circle><path d="M6 7.5v9"></path><path d="M8.3 6.1c4.6 1 7.2 2.9 7.7 5.9"></path><path d="M8.3 17.9c4.6-1 7.2-2.9 7.7-5.9"></path></svg>`;
+    case "check": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m4 12.5 5 5L20 6.5"></path></svg>`;
+    case "chevron-down": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 9 7 7 7-7"></path></svg>`;
+    case "plus": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>`;
+    case "refresh": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.35-5.65"></path><path d="M20 4v6h-6"></path></svg>`;
+    case "sparkles": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 10.6 8.6 5 10l5.6 1.4L12 17l1.4-5.6L19 10l-5.6-1.4L12 3Z"></path><path d="M19 15l-.7 2.3L16 18l2.3.7L19 21l.7-2.3L22 18l-2.3-.7L19 15Z"></path></svg>`;
+    case "undo": return svg`<svg class=${classes} viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 7H4v5"></path><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"></path></svg>`;
+  }
 }
 
 function renderDiffSection(diff: GitDiffResponse | SelectedReviewDiff): TemplateResult {
