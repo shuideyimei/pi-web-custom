@@ -4,7 +4,7 @@ import type { SessionActivity, SessionInfo, SessionStatus } from "../api";
 import { isCachedNewSessionInfo } from "../cachedNewSessions";
 import { isSessionActive } from "../../../shared/activity";
 import { actionMenuPanelStyle } from "./actionMenu";
-import { renderActionActivityIndicator, type ActivityIndicatorKind } from "./activityBadge";
+import { activityRowClass, type ActivityIndicatorKind } from "./activityBadge";
 import type { KeyboardNavigableSection } from "./navigationFocus";
 import { activateSelectableRow, focusSelectedOrFirstSelectableRow, handleSelectableRowKeyboard } from "./selectableRow";
 import { listStyles } from "./shared";
@@ -226,7 +226,7 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
     const menuOpen = this.openMenuSessionId === session.id;
     return html`
       <div
-        class="action-row ${selected ? "selected" : ""} ${bulkSelected ? "bulk-selected" : ""} ${session.archived === true ? "archived" : ""} ${selectionActive ? "selecting" : ""}"
+        class="action-row session-row ${selected ? "selected" : ""} ${bulkSelected ? "bulk-selected" : ""} ${session.archived === true ? "archived" : ""} ${selectionActive ? "selecting" : ""} ${activityRowClass(this.sessionActivityKind(session))}"
         data-session-id=${session.id}
         style=${`--depth:${String(cappedDepth)}`}
         tabindex="0"
@@ -236,7 +236,6 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
         <div class="action-main ${selectionActive ? "selecting" : ""}" @click=${(event: MouseEvent) => { this.handleSessionMainClick(session, scope, event); }}>
           ${showsCheckbox ? html`<input class="session-checkbox" type="checkbox" aria-label=${`Select ${sessionLabel(session)}`} .checked=${bulkSelected} @click=${(event: MouseEvent) => { event.stopPropagation(); }} @change=${() => { this.toggleSelected(session.id); }}>` : null}
           <span class="action-name" dir="auto">${row.depth > 0 ? html`<span class="tree-marker">↳</span>` : null}${sessionLabel(session)}${row.depth > 2 ? html` <span class="badge">depth ${row.depth}</span>` : null}${row.hasMissingParent ? html` <span class="badge">parent unavailable</span>` : null}</span>
-          ${this.renderActivity(session)}
         </div>
         <div class="action-menu">
           <button
@@ -437,9 +436,8 @@ export class SessionList extends LitElement implements KeyboardNavigableSection 
     this.renderRoot.querySelector<HTMLElement>(".action-row.selected")?.scrollIntoView({ block: "nearest" });
   }
 
-  private renderActivity(session: SessionInfo) {
-    const kind = sessionRowActivityKind(session, this.statuses[session.id], this.activities[session.id], this.sending[session.id] === true);
-    return renderActionActivityIndicator(kind, kind === "sending" ? "Sending message" : "Session active");
+  private sessionActivityKind(session: SessionInfo): ActivityIndicatorKind | undefined {
+    return sessionRowActivityKind(session, this.statuses[session.id], this.activities[session.id], this.sending[session.id] === true);
   }
 
   static override styles = [listStyles, css`

@@ -12,3 +12,7 @@ export function renderActionActivityIndicator(kind: ActivityIndicatorKind | unde
   if (indicator === undefined) return undefined;
   return html`<span class="action-activity">${indicator}</span>`;
 }
+
+export function activityRowClass(kind: ActivityIndicatorKind | undefined): string {
+  return kind === undefined ? "" : `working working-${kind}`;
+}

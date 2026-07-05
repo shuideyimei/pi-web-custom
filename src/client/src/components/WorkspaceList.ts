@@ -4,7 +4,7 @@ import type { Workspace, WorkspaceActivity } from "../api";
 import type { WorkspaceLabelItem } from "../plugins/types";
 import { workspaceActivityFor, workspaceActivityIndicator } from "../workspaceActivity";
 import { actionMenuPanelStyle } from "./actionMenu";
-import { renderActionActivityIndicator } from "./activityBadge";
+import { activityRowClass } from "./activityBadge";
 import type { KeyboardNavigableSection } from "./navigationFocus";
 import { activateSelectableRow, focusSelectedOrFirstSelectableRow, handleSelectableRowKeyboard } from "./selectableRow";
 import { listStyles } from "./shared";
@@ -65,7 +65,7 @@ export class WorkspaceList extends LitElement implements KeyboardNavigableSectio
               const items = this.workspaceLabelItems(workspace);
               return html`
                 <div
-                  class=${`action-row workspace-row ${this.selected?.id === workspace.id ? "selected" : ""}`}
+                  class=${`action-row workspace-row ${this.selected?.id === workspace.id ? "selected" : ""} ${activityRowClass(this.workspaceActivityKind(workspace))}`}
                   tabindex="0"
                   title=${label}
                   @click=${(event: MouseEvent) => { activateSelectableRow(event, () => this.onSelect?.(workspace)); }}
@@ -91,9 +91,8 @@ export class WorkspaceList extends LitElement implements KeyboardNavigableSectio
     return html`<button class="section-toggle" aria-expanded=${String(!this.collapsed)} @click=${() => { this.onToggleCollapsed?.(); }}><span class="section-title"><span class="section-name">${this.collapsed ? "▸" : "▾"} Workspaces</span>${this.collapsed ? html`<small class="section-selected" title=${selectedTitle}>${selectedSummary}</small>` : null}</span><small class="section-count">${this.workspaces.length}</small></button>`;
   }
 
-  private renderActivity(workspace: Workspace): TemplateResult | undefined {
-    const kind = workspaceActivityIndicator(workspaceActivityFor(workspace, this.activities));
-    return renderActionActivityIndicator(kind, kind === "terminal" ? "Workspace terminal active" : "Workspace active");
+  private workspaceActivityKind(workspace: Workspace) {
+    return workspaceActivityIndicator(workspaceActivityFor(workspace, this.activities));
   }
 
   private renderWorkspaceMain(label: string, items: WorkspaceLabelItem[], workspace: Workspace): TemplateResult {
@@ -107,7 +106,6 @@ export class WorkspaceList extends LitElement implements KeyboardNavigableSectio
           <span class="workspace-label">${renderWorkspaceLabelInlineItems(items)}</span>
         </small>
       `}
-      ${this.renderActivity(workspace)}
     `;
   }
 

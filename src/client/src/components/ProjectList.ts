@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { Project, Workspace, WorkspaceActivity } from "../api";
 import { projectActivityIndicator } from "../workspaceActivity";
 import { actionMenuPanelStyle } from "./actionMenu";
-import { renderActionActivityIndicator } from "./activityBadge";
+import { activityRowClass } from "./activityBadge";
 import type { KeyboardNavigableSection } from "./navigationFocus";
 import { activateSelectableRow, focusSelectedOrFirstSelectableRow, handleSelectableRowKeyboard } from "./selectableRow";
 import { listStyles } from "./shared";
@@ -57,7 +57,7 @@ export class ProjectList extends LitElement implements KeyboardNavigableSection 
           <div class="list-body">
             ${this.projects.map((project) => html`
               <div
-                class=${`action-row ${this.selected?.id === project.id ? "selected" : ""}`}
+                class=${`action-row project-row ${this.selected?.id === project.id ? "selected" : ""} ${activityRowClass(this.projectActivityKind(project))}`}
                 tabindex="0"
                 title=${project.path}
                 @click=${(event: MouseEvent) => { activateSelectableRow(event, () => this.onSelect?.(project)); }}
@@ -65,7 +65,6 @@ export class ProjectList extends LitElement implements KeyboardNavigableSection 
               >
                 <div class="action-main">
                   <span class="action-name">${project.name}</span><small>${project.path}</small>
-                  ${this.renderActivity(project)}
                 </div>
                 <div class="action-menu">
                   <button class="action-menu-toggle" title="Project actions" aria-label=${`Actions for ${project.name}`} @click=${(event: MouseEvent) => { event.stopPropagation(); this.toggleMenu(project.id, event.currentTarget); }}>⋯</button>
@@ -99,9 +98,8 @@ export class ProjectList extends LitElement implements KeyboardNavigableSection 
     return html`<button class="section-toggle" aria-expanded=${String(!this.collapsed)} @click=${() => { this.onToggleCollapsed?.(); }}><span class="section-title"><span class="section-name">${this.collapsed ? "▸" : "▾"} Projects</span>${this.collapsed ? html`<small class="section-selected" title=${selectedTitle}>${selectedSummary}</small>` : null}</span><small class="section-count">${this.projects.length}</small></button>`;
   }
 
-  private renderActivity(project: Project) {
-    const kind = projectActivityIndicator(project, this.workspacesByProjectId[project.id] ?? [], this.activities);
-    return renderActionActivityIndicator(kind, kind === "terminal" ? "Project terminal active" : "Project active");
+  private projectActivityKind(project: Project) {
+    return projectActivityIndicator(project, this.workspacesByProjectId[project.id] ?? [], this.activities);
   }
 
   private toggleMenu(projectId: string, target: EventTarget | null) {

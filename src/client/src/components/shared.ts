@@ -266,6 +266,46 @@ export const listStyles = css`
   .action-row.selected .action-main, .action-row.selected .action-menu-toggle { background: var(--pi-selection-bg); }
   .action-row.archived .action-main { color: var(--pi-muted); }
   .action-main { position: relative; box-sizing: border-box; min-width: 0; width: 100%; border: 0; border-radius: 6px; background: transparent; color: var(--pi-text); padding: 6px 22px 6px calc(9px + var(--depth, 0) * 16px); text-align: left; }
+  .action-row.working {
+    --activity-row-active: var(--pi-success);
+    --activity-row-active-muted: color-mix(in srgb, var(--activity-row-active) 54%, transparent);
+    --activity-row-active-glow: color-mix(in srgb, var(--activity-row-active) 34%, transparent);
+  }
+  .action-row.working-terminal { --activity-row-active: var(--pi-running); }
+  .action-row.working-sending { --activity-row-active: var(--pi-warning); }
+  .action-row.working .action-main::before {
+    content: '';
+    position: absolute;
+    left: calc(3px + var(--depth, 0) * 16px);
+    top: 7px;
+    bottom: 7px;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, transparent 0%, var(--activity-row-active-muted) 34%, var(--activity-row-active) 50%, var(--activity-row-active-muted) 66%, transparent 100%);
+    background-size: 100% 240%;
+    box-shadow: 0 0 10px var(--activity-row-active-glow);
+    opacity: .65;
+    pointer-events: none;
+    animation: activity-rail-flow 2.8s ease-in-out infinite;
+  }
+  .project-row.working .action-main::before { opacity: .45; }
+  .workspace-row.working .action-main::before { opacity: .58; }
+  .session-row.working .action-main::before { opacity: .9; }
+  .session-row.working .action-main::after {
+    content: '';
+    position: absolute;
+    left: calc(9px + var(--depth, 0) * 16px);
+    right: 14px;
+    bottom: 3px;
+    height: 1px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent 0%, var(--activity-row-active-muted) 38%, var(--activity-row-active) 50%, var(--activity-row-active-muted) 62%, transparent 100%);
+    background-size: 240% 100%;
+    opacity: .72;
+    pointer-events: none;
+    animation: activity-session-line-flow 2.4s linear infinite;
+  }
+  .session-row.working .action-main.selecting::after { left: calc(32px + var(--depth, 0) * 16px); }
   .action-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
   .action-row:not(.selected):hover .action-main { background: var(--pi-hover-overlay); }
   .workspace-row .action-main { border-radius: 6px; }
@@ -340,6 +380,8 @@ export const listStyles = css`
   .workspace-label-link:hover, .workspace-label-link:focus { text-decoration: underline; }
   .workspace-detail-row .workspace-label { overflow: visible; white-space: normal; flex-wrap: wrap; }
   .workspace-detail-row .workspace-label-base, .workspace-detail-row .workspace-label-item, .workspace-detail-row .workspace-label-render { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; white-space: normal; }
+  @keyframes activity-rail-flow { 0% { background-position: 0 120%; } 100% { background-position: 0 -120%; } }
+  @keyframes activity-session-line-flow { 0% { background-position: 130% 0; } 100% { background-position: -130% 0; } }
   @keyframes activity-breathe { 0%, 100% { transform: scale(.7); opacity: .4; } 50% { transform: scale(1); opacity: 1; } }
   @keyframes activity-glow { 0%, 100% { transform: scale(.8); opacity: 0; } 50% { transform: scale(1.6); opacity: .35; } }
   @keyframes terminal-cursor-blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
@@ -347,6 +389,13 @@ export const listStyles = css`
   @keyframes activity-sending-spin { 0% { transform: scale(.8); opacity: .6; clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%); } 50% { transform: scale(1); opacity: 1; clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%); } 100% { transform: scale(.8); opacity: .6; clip-path: polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%); } }
   @keyframes activity-sending-glow { 0% { transform: scale(.8); opacity: 0; } 50% { transform: scale(1.8); opacity: .3; } 100% { transform: scale(.8); opacity: 0; } }
   @keyframes pulse { 0%, 100% { transform: scale(.75); opacity: .55; } 50% { transform: scale(1.2); opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .action-row.working .action-main::before,
+    .session-row.working .action-main::after {
+      animation: none;
+      background-position: 50% 50%;
+    }
+  }
 `;
 
 export const chatStyles = css`
