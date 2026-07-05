@@ -97,16 +97,16 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24.18.0 <25"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jmfederico/pi-web.git"
+    "url": "git+https://github.com/shuideyimei3/pi-web-custom.git"
   },
   "bugs": {
-    "url": "https://github.com/jmfederico/pi-web/issues"
+    "url": "https://github.com/shuideyimei3/pi-web-custom/issues"
   },
-  "homepage": "https://pi-web.dev/",
+  "homepage": "https://github.com/shuideyimei3/pi-web-custom",
   "packageManager": "npm@11.11.0",
   "peerDependencies": {
     "@earendil-works/pi-agent-core": ">=0.78.0 <1",
@@ -135,6 +135,6 @@
     "extensions": [
       "./extensions"
     ],
-    "image": "https://raw.githubusercontent.com/jmfederico/pi-web/main/docs/assets/pi-web-banner.png"
+    "image": "https://raw.githubusercontent.com/shuideyimei3/pi-web-custom/main/docs/assets/pi-web-banner.png"
   }
 }

@@ -56,7 +56,7 @@ Typical flow: add a project → choose a workspace or git worktree → start a s
 
 ### Requirements
 
-- Node.js 22 or newer.
+- Node.js 24.18.0 LTS, or a newer Node 24 patch release.
 - npm.
 - Pi Coding Agent configured for the current user.
 - git and any build/test tools needed by your target projects.

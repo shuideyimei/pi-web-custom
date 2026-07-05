@@ -11,6 +11,10 @@ import { packageVersion, printPiWebVersionReport } from "./piWebVersionReport.js
 import { checkNodePtyDarwinSpawnHelper, formatNodePtyDarwinSpawnHelperCheck } from "./server/diagnostics/nodePtySpawnHelper.js";
 
 const PI_WEB_PACKAGE_NAME = "@jmfederico/pi-web";
+const REQUIRED_NODE_MAJOR = 24;
+const REQUIRED_NODE_MINOR = 18;
+const REQUIRED_NODE_PATCH = 0;
+const NODE_REQUIREMENT_LABEL = "node 24.18.0+ <25";
 
 const systemdServiceDir = join(homedir(), ".config", "systemd", "user");
 const launchdServiceDir = join(homedir(), "Library", "LaunchAgents");
@@ -760,8 +764,8 @@ function backendAvailabilityChecks(backend: ServiceBackend): Check[] {
 
 function baseShellChecks(backend: ServiceBackend): Check[] {
   const shell = serviceShellLabel();
-  const checks: Check[] = [[`${shell} can find node >= 22`, serviceShellCommand(nodeVersionCheck())]];
-  if (backend.kind === "systemd") checks.push([`systemd user ${shell} can find node >= 22`, systemdUserServiceShellCommand(nodeVersionCheck())]);
+  const checks: Check[] = [[`${shell} can find ${NODE_REQUIREMENT_LABEL}`, serviceShellCommand(nodeVersionCheck())]];
+  if (backend.kind === "systemd") checks.push([`systemd user ${shell} can find ${NODE_REQUIREMENT_LABEL}`, systemdUserServiceShellCommand(nodeVersionCheck())]);
   return checks;
 }
 
@@ -1030,10 +1034,16 @@ export function commandWithVersionCheck(command: string): string {
 }
 
 function nodeVersionCheck(): string {
-  return [
-    commandCheck("node"),
-    "node -e \"const major = Number(process.versions.node.split('.')[0]); console.log(process.version); process.exit(major >= 22 ? 0 : 1);\"",
-  ].join(" && ");
+  const requiredMajor = String(REQUIRED_NODE_MAJOR);
+  const requiredMinor = String(REQUIRED_NODE_MINOR);
+  const requiredPatch = String(REQUIRED_NODE_PATCH);
+  const check = [
+    "const [major, minor, patch] = process.versions.node.split('.').map(Number);",
+    `const ok = major === ${requiredMajor} && (minor > ${requiredMinor} || (minor === ${requiredMinor} && patch >= ${requiredPatch}));`,
+    "console.log(process.version);",
+    "process.exit(ok ? 0 : 1);",
+  ].join(" ");
+  return [commandCheck("node"), `node -e ${JSON.stringify(check)}`].join(" && ");
 }
 
 function doctorChecks(): Check[] {
@@ -1041,7 +1051,7 @@ function doctorChecks(): Check[] {
   const backend = currentServiceBackend();
   if (backend === undefined) {
     return [
-      [`${shell} can find node >= 22`, serviceShellCommand(nodeVersionCheck())],
+      [`${shell} can find ${NODE_REQUIREMENT_LABEL}`, serviceShellCommand(nodeVersionCheck())],
       [`${shell} can find npm`, serviceShellCommand(commandWithVersionCheck("npm"))],
       [`${shell} can find pi`, serviceShellCommand(commandWithVersionCheck("pi"))],
     ];

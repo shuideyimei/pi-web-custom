@@ -156,7 +156,7 @@
             <article id="doctor-fails" class="faq-item">
               <h2>What does <code>pi-web doctor</code> check?</h2>
               <p>
-                It checks whether the service shell and native service environment can find Node 22+, npm, Pi, and the Pi
+                It checks whether the service shell and native service environment can find Node 24.18.0 LTS (or a newer Node 24 patch), npm, Pi, and the Pi
                 Web binaries. It also prints installed and running PI WEB versions when available, reports optional ripgrep
                 availability for faster all-file <code>@</code>-mention suggestions, uses a bounded filesystem fallback when
                 ripgrep is unavailable, and reports user service lingering when relevant for server-style installs.
@@ -177,7 +177,7 @@
               <ul>
                 <li>Prefer version-manager shims when available; for <code>mise</code>, use shims or enable its shim setup rather than relying only on shell activation.</li>
                 <li>Move any required version-manager initialization to your login shell file.</li>
-                <li>Make sure <code>node --version</code> is at least <code>v22</code> from <code>bash -lc</code>, <code>zsh -lc</code>, or your detected shell.</li>
+                <li>Make sure <code>node --version</code> reports <code>v24.18.0</code> or a newer Node 24 patch release from <code>bash -lc</code>, <code>zsh -lc</code>, or your detected shell.</li>
                 <li>Run <code>pi-web doctor</code> again after changing shell files.</li>
               </ul>
             </article>

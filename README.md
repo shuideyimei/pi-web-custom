@@ -56,7 +56,7 @@ Session     在某个 workspace 中运行的 Pi Coding Agent 聊天会话
 
 ### 前置条件
 
-- Node.js 22 或更新版本。
+- Node.js 24.18.0 LTS（Node 24）或更新的 Node 24 补丁版本。
 - npm。
 - 当前用户已配置 Pi Coding Agent。
 - git，以及目标项目需要的构建/测试工具。

@@ -1208,9 +1208,11 @@ export class ChatView extends LitElement {
     this.restoreScrollFrame = requestAnimationFrame(() => {
       this.restoreScrollFrame = undefined;
       if (this.sessionId !== sessionId) return;
-      this.withSuppressedScrollSave(() => {
-        const result = this.scrollController.restorePosition(sessionId, this.chat, this.scrollAnchorElements(), { fallbackToBottom: this.shouldFallbackToBottomForMissingAnchor() });
-        this.handleScrollRestoreResult(sessionId, result);
+      this.withInstantScrollRestore(() => {
+        this.withSuppressedScrollSave(() => {
+          const result = this.scrollController.restorePosition(sessionId, this.chat, this.scrollAnchorElements(), { fallbackToBottom: this.shouldFallbackToBottomForMissingAnchor() });
+          this.handleScrollRestoreResult(sessionId, result);
+        });
       });
     });
   }
@@ -1227,9 +1229,11 @@ export class ChatView extends LitElement {
     this.restoreScrollFrame = requestAnimationFrame(() => {
       this.restoreScrollFrame = undefined;
       if (this.sessionId !== sessionId) return;
-      this.withSuppressedScrollSave(() => {
-        const result = this.scrollController.restoreExplicitPosition(position, this.chat, this.scrollAnchorElements(), { fallbackToBottom: this.shouldFallbackToBottomForMissingAnchor() });
-        this.handleScrollRestoreResult(sessionId, result);
+      this.withInstantScrollRestore(() => {
+        this.withSuppressedScrollSave(() => {
+          const result = this.scrollController.restoreExplicitPosition(position, this.chat, this.scrollAnchorElements(), { fallbackToBottom: this.shouldFallbackToBottomForMissingAnchor() });
+          this.handleScrollRestoreResult(sessionId, result);
+        });
       });
     });
   }
@@ -1271,6 +1275,21 @@ export class ChatView extends LitElement {
     if (chat === undefined) return;
     this.lastScrollTop = chat.scrollTop;
     this.lastClientHeight = chat.clientHeight;
+  }
+
+  private withInstantScrollRestore(action: () => void): void {
+    const chat = this.chat;
+    if (chat === undefined) {
+      action();
+      return;
+    }
+    const previousScrollBehavior = chat.style.scrollBehavior;
+    chat.style.scrollBehavior = "auto";
+    try {
+      action();
+    } finally {
+      chat.style.scrollBehavior = previousScrollBehavior;
+    }
   }
 
   private cancelPrependRestore(): void {
