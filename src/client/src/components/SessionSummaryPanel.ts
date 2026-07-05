@@ -29,13 +29,13 @@ export class SessionSummaryPanel extends LitElement {
             <p>Send a message or run workspace tools to populate this pane.</p>
           </div>
         ` : html`
+          ${this.renderSection("Next steps", summary.nextSteps, "No queued or inferred next steps.")}
           ${this.renderSection("Plan", summary.plan, "No explicit plan captured.")}
           ${this.renderSection("Sources", summary.sources, "No files or sources read yet.")}
           ${this.renderFiles(summary.filesChanged)}
           ${this.renderCommands("Commands run", summary.commandsRun)}
           ${this.renderCommands("Test results", summary.testResults, "No test commands detected.")}
           ${this.renderSection("Artifacts", summary.artifacts, "No artifacts selected.")}
-          ${this.renderSection("Next steps", summary.nextSteps, "No queued or inferred next steps.")}
         `}
       </section>
     `;
