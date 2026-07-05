@@ -101,12 +101,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shuideyimei3/pi-web-custom.git"
+    "url": "git+https://github.com/shuideyimei/pi-web-custom.git"
   },
   "bugs": {
-    "url": "https://github.com/shuideyimei3/pi-web-custom/issues"
+    "url": "https://github.com/shuideyimei/pi-web-custom/issues"
   },
-  "homepage": "https://github.com/shuideyimei3/pi-web-custom",
+  "homepage": "https://github.com/shuideyimei/pi-web-custom",
   "packageManager": "npm@11.11.0",
   "peerDependencies": {
     "@earendil-works/pi-agent-core": ">=0.78.0 <1",
@@ -135,6 +135,6 @@
     "extensions": [
       "./extensions"
     ],
-    "image": "https://raw.githubusercontent.com/shuideyimei3/pi-web-custom/main/docs/assets/pi-web-banner.png"
+    "image": "https://raw.githubusercontent.com/shuideyimei/pi-web-custom/main/docs/assets/pi-web-banner.png"
   }
 }
