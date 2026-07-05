@@ -453,6 +453,11 @@ export interface GitActionResponse {
   status: GitStatusResponse;
 }
 
+export interface GitRemoteActionResponse extends GitActionResponse {
+  summary: string;
+  truncated: boolean;
+}
+
 export interface GitCommitResponse extends GitActionResponse {
   commit: string;
   summary: string;

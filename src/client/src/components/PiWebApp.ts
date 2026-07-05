@@ -1388,6 +1388,9 @@ export class PiWebApp extends LitElement {
         onStageAllGitFiles: () => this.git.stageAll(),
         onUnstageAllGitFiles: () => this.git.unstageAll(),
         onCommitGitChanges: (message: string) => this.git.commit(message),
+        onPullGitChanges: () => this.git.pull(),
+        onPushGitChanges: () => this.git.push(),
+        onFetchAllGitRemotes: () => this.git.fetchAll(),
         onSelectTerminal: (terminalId: string | undefined, options?: { replace?: boolean | undefined }) => { this.selectTerminal(terminalId, options); },
       }, createContext);
     };

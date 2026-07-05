@@ -17,6 +17,7 @@ import {
   parseGitCommitResponse,
   parseGitDiffResponse,
   parseGitLogResponse,
+  parseGitRemoteActionResponse,
   parseGitStatusResponse,
   parseMachine,
   parseMachineHealth,
@@ -278,6 +279,9 @@ export const gitApi = {
   gitStage: (projectId: string, workspaceId: string, options: { path?: string }, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/stage`, parseGitActionResponse, { method: "POST", body: JSON.stringify(options) }),
   gitUnstage: (projectId: string, workspaceId: string, options: { path?: string }, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/unstage`, parseGitActionResponse, { method: "POST", body: JSON.stringify(options) }),
   gitCommit: (projectId: string, workspaceId: string, options: { message: string }, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/commit`, parseGitCommitResponse, { method: "POST", body: JSON.stringify(options) }),
+  gitPull: (projectId: string, workspaceId: string, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/pull`, parseGitRemoteActionResponse, { method: "POST" }),
+  gitPush: (projectId: string, workspaceId: string, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/push`, parseGitRemoteActionResponse, { method: "POST" }),
+  gitFetchAll: (projectId: string, workspaceId: string, machineId = "local") => request(`${machinePrefix(machineId)}/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}/git/fetch-all`, parseGitRemoteActionResponse, { method: "POST" }),
 };
 
 export const api = {

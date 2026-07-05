@@ -109,6 +109,18 @@ export class GitController {
     }
   }
 
+  async pull(): Promise<void> {
+    await this.applyGitRemoteAction((projectId, workspaceId, machineId) => api.gitPull(projectId, workspaceId, machineId));
+  }
+
+  async push(): Promise<void> {
+    await this.applyGitRemoteAction((projectId, workspaceId, machineId) => api.gitPush(projectId, workspaceId, machineId));
+  }
+
+  async fetchAll(): Promise<void> {
+    await this.applyGitRemoteAction((projectId, workspaceId, machineId) => api.gitFetchAll(projectId, workspaceId, machineId));
+  }
+
   async refreshDiff(path: string): Promise<void> {
     const project = this.getState().selectedProject;
     const workspace = this.getState().selectedWorkspace;
@@ -134,6 +146,22 @@ export class GitController {
       const response = await action(project.id, workspace.id, machineId);
       await this.applyGitStatus(response.status);
       this.setState({ error: "" });
+    } catch (error) {
+      this.setState({ error: String(error) });
+      throw error;
+    }
+  }
+
+  private async applyGitRemoteAction(action: (projectId: string, workspaceId: string, machineId: string) => Promise<{ status: GitStatusResponse }>): Promise<void> {
+    const project = this.getState().selectedProject;
+    const workspace = this.getState().selectedWorkspace;
+    if (project === undefined || workspace === undefined) return;
+    const machineId = selectedMachineId(this.getState());
+    try {
+      const response = await action(project.id, workspace.id, machineId);
+      const gitLog = await api.gitLog(project.id, workspace.id, machineId);
+      await this.applyGitStatus(response.status);
+      this.setState({ gitLog, error: "" });
     } catch (error) {
       this.setState({ error: String(error) });
       throw error;

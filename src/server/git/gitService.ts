@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import type { GitActionResponse, GitCommitResponse, GitDiffResponse, GitFileState, GitLogEntry, GitLogResponse, GitStatusFile, GitStatusResponse } from "../../shared/apiTypes.js";
+import type { GitActionResponse, GitCommitResponse, GitDiffResponse, GitFileState, GitLogEntry, GitLogResponse, GitRemoteActionResponse, GitStatusFile, GitStatusResponse } from "../../shared/apiTypes.js";
 import { normalizeRelativePath } from "../workspaces/pathSafety.js";
 import { sanitizedGitEnv } from "./gitEnv.js";
 
@@ -81,6 +81,24 @@ export async function gitCommit(cwd: string, options: { message: string }): Prom
   return { ok: true, commit: commitHash, summary: firstCommitOutputLine(result.stdout), status: await gitStatus(cwd) };
 }
 
+export async function gitPull(cwd: string): Promise<GitRemoteActionResponse> {
+  return gitRemoteAction(cwd, ["pull", "--ff-only"], "git pull failed");
+}
+
+export async function gitPush(cwd: string): Promise<GitRemoteActionResponse> {
+  return gitRemoteAction(cwd, ["push"], "git push failed");
+}
+
+export async function gitFetchAll(cwd: string): Promise<GitRemoteActionResponse> {
+  return gitRemoteAction(cwd, ["fetch", "--all", "--prune"], "git fetch failed");
+}
+
+async function gitRemoteAction(cwd: string, args: string[], fallback: string): Promise<GitRemoteActionResponse> {
+  const result = await runGit(cwd, args, { timeoutMs: 60_000 });
+  if (result.code !== 0) throwGitError(result, fallback);
+  return { ok: true, summary: firstGitOutputLine(result.stdout, result.stderr), truncated: result.truncated, status: await gitStatus(cwd) };
+}
+
 async function lastCommitDiff(cwd: string, path: string): Promise<GitDiffResponse | undefined> {
   const logResult = await runGit(cwd, ["log", "-1", "--format=%H", "--", path]);
   if (logResult.code !== 0) return undefined;
@@ -123,6 +141,10 @@ function parseLog(raw: string): GitLogEntry[] {
 
 function firstCommitOutputLine(stdout: string): string {
   return stdout.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? "Committed staged changes";
+}
+
+function firstGitOutputLine(stdout: string, stderr: string): string {
+  return `${stdout}\n${stderr}`.split("\n").map((line) => line.trim()).find((line) => line !== "") ?? "Git operation completed";
 }
 
 function throwGitError(result: { stderr: string; stdout: string }, fallback: string): never {
@@ -188,10 +210,10 @@ function hash(value: string): string {
   return createHash("sha1").update(value).digest("hex");
 }
 
-async function runGit(cwd: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string; truncated: boolean }> {
+async function runGit(cwd: string, args: string[], options: { timeoutMs?: number } = {}): Promise<{ code: number; stdout: string; stderr: string; truncated: boolean }> {
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, { cwd, env: sanitizedGitEnv(), stdio: ["ignore", "pipe", "pipe"] });
-    const timer = setTimeout(() => { child.kill("SIGKILL"); }, 10000);
+    const timer = setTimeout(() => { child.kill("SIGKILL"); }, options.timeoutMs ?? 10000);
     let stdout = Buffer.alloc(0);
     let stderr = Buffer.alloc(0);
     let truncated = false;

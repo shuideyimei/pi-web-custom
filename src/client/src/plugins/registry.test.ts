@@ -638,6 +638,9 @@ function createWorkspacePanelContext(machineId: string, prompt: WorkspacePanelCo
     onStageAllGitFiles: vi.fn(),
     onUnstageAllGitFiles: vi.fn(),
     onCommitGitChanges: vi.fn(),
+    onPullGitChanges: vi.fn(),
+    onPushGitChanges: vi.fn(),
+    onFetchAllGitRemotes: vi.fn(),
     onSelectTerminal: vi.fn(),
   };
 }

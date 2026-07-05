@@ -67,6 +67,29 @@ describe("GitController", () => {
     expect(harness.state.selectedStagedDiff).toEqual(stagedDiff);
   });
 
+  it("runs remote git actions and refreshes the log", async () => {
+    installWindowStub();
+    const harness = createHarness();
+    const status = gitStatus([]);
+    const log = gitLog();
+    vi.spyOn(api, "gitPull").mockResolvedValue(remoteAction(status));
+    vi.spyOn(api, "gitPush").mockResolvedValue(remoteAction(status));
+    vi.spyOn(api, "gitFetchAll").mockResolvedValue(remoteAction(status));
+    vi.spyOn(api, "gitLog").mockResolvedValue(log);
+
+    await harness.controller.pull();
+    await harness.controller.push();
+    await harness.controller.fetchAll();
+
+    expect(api.gitPull).toHaveBeenCalledWith("project-1", "workspace-1", "local");
+    expect(api.gitPush).toHaveBeenCalledWith("project-1", "workspace-1", "local");
+    expect(api.gitFetchAll).toHaveBeenCalledWith("project-1", "workspace-1", "local");
+    expect(api.gitLog).toHaveBeenCalledTimes(3);
+    expect(harness.state.gitStatus).toEqual(status);
+    expect(harness.state.gitLog).toEqual(log);
+    expect(harness.state.error).toBe("");
+  });
+
   it("clears selected diffs when the workspace is no longer a git repository", async () => {
     installWindowStub();
     const harness = createHarness({ selectedDiffPath: "src/App.ts", selectedDiff: diffResponse({ path: "src/App.ts" }), selectedStagedDiff: diffResponse({ path: "src/App.ts", staged: true }), selectedReviewDiff: createSessionReviewDiff({ path: "src/App.ts", diff: "-old\n+new" }) });
@@ -105,6 +128,10 @@ function gitStatus(files: GitStatusResponse["files"]): GitStatusResponse {
 
 function gitLog() {
   return { isGitRepo: true, entries: [] };
+}
+
+function remoteAction(status: GitStatusResponse) {
+  return { ok: true as const, summary: "ok", truncated: false, status };
 }
 
 function diffResponse(overrides: Partial<GitDiffResponse>): GitDiffResponse {

@@ -178,6 +178,9 @@ export interface WorkspacePanelContext extends WorkspaceContext {
   onStageAllGitFiles: () => void | Promise<void>;
   onUnstageAllGitFiles: () => void | Promise<void>;
   onCommitGitChanges: (message: string) => void | Promise<void>;
+  onPullGitChanges: () => void | Promise<void>;
+  onPushGitChanges: () => void | Promise<void>;
+  onFetchAllGitRemotes: () => void | Promise<void>;
   onSelectTerminal: (terminalId: string | undefined, options?: { replace?: boolean | undefined }) => void;
 }
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ProjectService } from "./projects/projectService.js";
 import type { WorkspaceService } from "./workspaces/workspaceService.js";
 import { resolveWorkspaceContext } from "./workspaces/workspaceContext.js";
-import { gitCommit, gitDiff, gitLog, gitStage, gitStatus, gitUnstage } from "./git/gitService.js";
+import { gitCommit, gitDiff, gitFetchAll, gitLog, gitPull, gitPush, gitStage, gitStatus, gitUnstage } from "./git/gitService.js";
 
 export function registerGitRoutes(app: FastifyInstance, projects: ProjectService, workspaces: WorkspaceService, prefix = "/api"): void {
   app.get<{ Params: { projectId: string; workspaceId: string } }>(`${prefix}/projects/:projectId/workspaces/:workspaceId/git/status`, async (request, reply) => {
@@ -55,6 +55,33 @@ export function registerGitRoutes(app: FastifyInstance, projects: ProjectService
       const context = await resolveWorkspaceContext(projects, workspaces, request.params.projectId, request.params.workspaceId);
       if (typeof request.body.message !== "string") throw new Error("Commit message is required");
       return await gitCommit(context.root, { message: request.body.message });
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post<{ Params: { projectId: string; workspaceId: string } }>(`${prefix}/projects/:projectId/workspaces/:workspaceId/git/pull`, async (request, reply) => {
+    try {
+      const context = await resolveWorkspaceContext(projects, workspaces, request.params.projectId, request.params.workspaceId);
+      return await gitPull(context.root);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post<{ Params: { projectId: string; workspaceId: string } }>(`${prefix}/projects/:projectId/workspaces/:workspaceId/git/push`, async (request, reply) => {
+    try {
+      const context = await resolveWorkspaceContext(projects, workspaces, request.params.projectId, request.params.workspaceId);
+      return await gitPush(context.root);
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  app.post<{ Params: { projectId: string; workspaceId: string } }>(`${prefix}/projects/:projectId/workspaces/:workspaceId/git/fetch-all`, async (request, reply) => {
+    try {
+      const context = await resolveWorkspaceContext(projects, workspaces, request.params.projectId, request.params.workspaceId);
+      return await gitFetchAll(context.root);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) });
     }
