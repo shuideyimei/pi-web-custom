@@ -224,6 +224,8 @@ export interface PiAgentSession {
   getSessionStats(): { sessionId: string; totalMessages: number; userMessages: number; assistantMessages: number; toolCalls: number; tokens: ClientSessionStatus["tokens"]; cost: number };
   getContextUsage(): ClientSessionStatus["contextUsage"] | undefined;
   prompt(text: string, options?: { streamingBehavior?: "steer" | "followUp"; images?: ImageContent[]; source?: "interactive" | "rpc" }): Promise<void>;
+  steer?: (text: string, images?: ImageContent[]) => Promise<void>;
+  followUp?: (text: string, images?: ImageContent[]) => Promise<void>;
   sendCustomMessage(message: { customType: string; content: string; display: boolean; details?: unknown }, options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" }): Promise<void>;
   executeBash(command: string, onChunk?: (chunk: string) => void, options?: { excludeFromContext?: boolean }): Promise<{ output: string; exitCode: number | undefined; cancelled: boolean; truncated: boolean; fullOutputPath?: string }>;
   abort(): Promise<void>;
@@ -1382,7 +1384,7 @@ export class PiSessionService {
       this.events.publish(session.sessionId, toClientEvent(event));
       this.publishActivityForEvent(session, event);
       const eventType = getString(event, "type");
-      if (eventType === "compaction_end") this.scheduleCompactionQueueDrain(session.sessionId);
+      if (eventType === "compaction_end") this.scheduleCompactionQueueDrain(session.sessionId, 0, { willRetry: getBoolean(event, "willRetry") === true });
       if (eventType === "agent_start" || eventType === "agent_end") this.scheduleCompactionQueueDrain(session.sessionId);
       this.publishStatus(session);
       this.updateSubsessionTracking(session);
@@ -1390,21 +1392,37 @@ export class PiSessionService {
     this.active.set(session.sessionId, active);
   }
 
-  private scheduleCompactionQueueDrain(sessionId: string, delayMs = 0): void {
+  private scheduleCompactionQueueDrain(sessionId: string, delayMs = 0, options: { willRetry?: boolean } = {}): void {
     if (!this.compactionPromptQueues.has(sessionId) || this.compactionDrainTimers.has(sessionId)) return;
     const timer = setTimeout(() => {
       this.compactionDrainTimers.delete(sessionId);
-      this.drainCompactionPromptQueue(sessionId);
+      this.drainCompactionPromptQueue(sessionId, options);
     }, delayMs);
     this.compactionDrainTimers.set(sessionId, timer);
   }
 
-  private drainCompactionPromptQueue(sessionId: string): void {
+  private drainCompactionPromptQueue(sessionId: string, options: { willRetry?: boolean } = {}): void {
     const active = this.active.get(sessionId);
     if (active === undefined) return;
     const { session } = active.runtime;
     if (session.isCompacting) {
-      this.scheduleCompactionQueueDrain(sessionId, 100);
+      this.scheduleCompactionQueueDrain(sessionId, 100, options);
+      return;
+    }
+
+    if (options.willRetry === true) {
+      // Overflow recovery is about to retry from pi's agent loop. Do not start a
+      // parallel prompt from pi-web; move our compaction queue into pi's own
+      // steering/follow-up queues so the retry turn drains it.
+      const queued = this.takeCompactionPromptQueue(sessionId);
+      if (queued.length === 0) return;
+      if (!session.isStreaming && !canQueuePromptsDirectly(session, queued)) {
+        this.restoreCompactionPromptQueue(sessionId, queued);
+        this.scheduleCompactionQueueDrain(sessionId, 25, options);
+        return;
+      }
+      this.publishStatus(session);
+      void this.queueCompactionPromptsForContinuation(session, queued);
       return;
     }
 
@@ -1420,13 +1438,54 @@ export class PiSessionService {
     if (prompt === undefined) return;
     this.publishStatus(session);
     const submitted = this.submitPrompt(session, prompt.text, undefined, prompt.images, prompt.echoUserMessage ?? true);
+    // Once the first queued prompt restarts the session, attach the remaining
+    // compaction messages to pi's queue immediately instead of waiting for a
+    // later agent_start event that may already have passed.
+    const remaining = this.takeCompactionPromptQueue(sessionId);
+    if (remaining.length > 0 && !isExtensionRuntimeCommand(session, prompt.text) && canQueuePromptsDirectly(session, remaining)) {
+      void this.queueCompactionPromptsForContinuation(session, remaining);
+      return;
+    }
+    this.restoreCompactionPromptQueue(sessionId, remaining);
     void submitted.finally(() => { this.scheduleCompactionQueueDrain(sessionId); });
+  }
+
+  private async queueCompactionPromptsForContinuation(session: PiAgentSession, prompts: QueuedPrompt[]): Promise<void> {
+    const remaining = [...prompts];
+    while (remaining.length > 0) {
+      const prompt = remaining.shift();
+      if (prompt === undefined) break;
+      try {
+        await this.queueCompactionPromptForContinuation(session, prompt);
+      } catch (error: unknown) {
+        this.restoreCompactionPromptQueue(session.sessionId, [prompt, ...remaining]);
+        const message = error instanceof Error ? error.message : String(error);
+        this.publishActivity(session, "error", "error", message);
+        this.events.publish(session.sessionId, { type: "session.error", message });
+        break;
+      }
+    }
+    this.publishStatus(session);
+  }
+
+  private queueCompactionPromptForContinuation(session: PiAgentSession, prompt: QueuedPrompt): Promise<void> {
+    if (session.isStreaming) return this.submitPrompt(session, prompt.text, prompt.kind, prompt.images, prompt.echoUserMessage ?? true);
+    if (isExtensionRuntimeCommand(session, prompt.text)) return this.submitPrompt(session, prompt.text, undefined, prompt.images, prompt.echoUserMessage ?? true);
+    if (prompt.kind === "steer" && session.steer !== undefined) return session.steer(prompt.text, prompt.images);
+    if (prompt.kind === "followUp" && session.followUp !== undefined) return session.followUp(prompt.text, prompt.images);
+    return this.submitPrompt(session, prompt.text, prompt.kind, prompt.images, prompt.echoUserMessage ?? true);
   }
 
   private takeCompactionPromptQueue(sessionId: string): QueuedPrompt[] {
     const queued = this.compactionPromptQueues.get(sessionId) ?? [];
     this.compactionPromptQueues.delete(sessionId);
     return queued;
+  }
+
+  private restoreCompactionPromptQueue(sessionId: string, prompts: QueuedPrompt[]): void {
+    if (prompts.length === 0) return;
+    const queued = this.compactionPromptQueues.get(sessionId) ?? [];
+    this.compactionPromptQueues.set(sessionId, [...prompts, ...queued]);
   }
 
   private shiftCompactionPrompt(sessionId: string): QueuedPrompt | undefined {
@@ -2133,6 +2192,17 @@ function clearParentSessionHeader(sessionManager: PiSessionManager): void {
 
 function clearSessionQueue(session: PiAgentSession): void {
   session.clearQueue();
+}
+
+function canQueuePromptsDirectly(session: PiAgentSession, prompts: readonly QueuedPrompt[]): boolean {
+  return prompts.every((prompt) => isExtensionRuntimeCommand(session, prompt.text) || (prompt.kind === "steer" ? session.steer !== undefined : session.followUp !== undefined));
+}
+
+function isExtensionRuntimeCommand(session: PiAgentSession, text: string): boolean {
+  if (!text.startsWith("/")) return false;
+  const spaceIndex = text.indexOf(" ");
+  const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+  return session.extensionRunner.getRegisteredCommands().some((command) => command.invocationName === commandName);
 }
 
 function queuedMessagesFromSession(session: PiAgentSession, extraQueuedMessages: readonly QueuedPrompt[] = []): { kind: "steer" | "followUp"; text: string }[] {

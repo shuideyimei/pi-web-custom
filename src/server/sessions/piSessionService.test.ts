@@ -767,6 +767,76 @@ describe("PiSessionService", () => {
     await service.dispose();
   });
 
+  it("queues remaining compaction prompts behind the restarted prompt", async () => {
+    const fake = fakeRuntime("compaction-continuation-session", { isCompacting: true });
+    const followUps: string[] = [];
+    let resolveFirstPrompt: (() => void) | undefined;
+    fake.session.prompt = (text: string, options?: { streamingBehavior?: "steer" | "followUp"; source?: "rpc" }) => {
+      fake.calls.prompt.push({ text, options });
+      if (options?.streamingBehavior === undefined) {
+        return new Promise<void>((resolve) => { resolveFirstPrompt = resolve; });
+      }
+      return Promise.resolve();
+    };
+    fake.session.followUp = (text: string) => {
+      followUps.push(text);
+      fake.session.pendingMessageCount = followUps.length;
+      return Promise.resolve();
+    };
+    fake.session.getFollowUpMessages = () => followUps;
+    const service = new PiSessionService(new CapturingSessionEventHub(), {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("compaction-continuation-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await service.prompt(sessionRef("compaction-continuation-session"), "Start after compact", "followUp");
+    await service.prompt(sessionRef("compaction-continuation-session"), "Continue after that", "followUp");
+
+    fake.session.isCompacting = false;
+    fake.emit({ type: "compaction_end", willRetry: false });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(fake.calls.prompt).toEqual([{ text: "Start after compact", options: { source: "rpc" } }]);
+    expect(followUps).toEqual(["Continue after that"]);
+    await expect(service.status(sessionRef("compaction-continuation-session"))).resolves.toMatchObject({
+      pendingMessageCount: 1,
+      queuedMessages: [{ kind: "followUp", text: "Continue after that" }],
+    });
+    resolveFirstPrompt?.();
+    await service.dispose();
+  });
+
+  it("queues compaction prompts for an overflow retry instead of starting another prompt", async () => {
+    const fake = fakeRuntime("compaction-retry-session", { isCompacting: true });
+    const followUps: string[] = [];
+    fake.session.followUp = (text: string) => {
+      followUps.push(text);
+      fake.session.pendingMessageCount = followUps.length;
+      return Promise.resolve();
+    };
+    fake.session.getFollowUpMessages = () => followUps;
+    const service = new PiSessionService(new CapturingSessionEventHub(), {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("compaction-retry-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await service.prompt(sessionRef("compaction-retry-session"), "Retry with this queued message", "followUp");
+
+    fake.session.isCompacting = false;
+    fake.emit({ type: "compaction_end", willRetry: true });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(fake.calls.prompt).toEqual([]);
+    expect(followUps).toEqual(["Retry with this queued message"]);
+    await expect(service.status(sessionRef("compaction-retry-session"))).resolves.toMatchObject({
+      pendingMessageCount: 1,
+      queuedMessages: [{ kind: "followUp", text: "Retry with this queued message" }],
+    });
+    await service.dispose();
+  });
+
   it("clears queued messages when aborting active work", async () => {
     const fake = fakeRuntime("abort-session");
     const service = new PiSessionService(new CapturingSessionEventHub(), {
