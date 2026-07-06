@@ -1,13 +1,14 @@
-import { realtimeEventStream, sessionEventStream } from "./api";
+import { realtimeEvents, realtimeEventStream, sessionEvents, sessionEventStream } from "./api";
 import type { GlobalSessionEvent, RealtimeEvent, SessionRef, SessionUiEvent } from "../../shared/apiTypes";
 
 export type { GlobalSessionEvent, RealtimeEvent, SessionUiEvent } from "../../shared/apiTypes";
 
 export class SessionSocket {
   private source: EventSource | undefined;
+  private socket: WebSocket | undefined;
   private session: SessionRef | undefined;
   private onEvent: ((event: SessionUiEvent) => void) | undefined;
-  private reconnectTimer?: number;
+  private reconnectTimer: number | undefined;
   private reconnectDelay = 500;
   private shouldReconnect = false;
   private hasOpened = false;
@@ -39,7 +40,9 @@ export class SessionSocket {
     this.isReconnecting = false;
     window.clearTimeout(this.reconnectTimer);
     closeEventSourceQuietly(this.source);
+    closeWebSocketQuietly(this.socket);
     this.source = undefined;
+    this.socket = undefined;
     this.session = undefined;
     this.onEvent = undefined;
     this.onReconnect = undefined;
@@ -69,10 +72,52 @@ export class SessionSocket {
     source.onmessage = (message) => void this.handleMessage(message.data);
     source.onerror = () => {
       if (!this.shouldReconnect) return;
+      if (!this.hasOpened) {
+        this.openWebSocketFallback();
+        return;
+      }
       // Native EventSource reconnects automatically. Mark the stream as
       // reconnecting so any late/buffered messages are held until the next open.
       this.isReconnecting = true;
     };
+  }
+
+  private openWebSocketFallback(): void {
+    if (this.session === undefined || !this.shouldReconnect) return;
+    closeEventSourceQuietly(this.source);
+    closeWebSocketQuietly(this.socket);
+    this.source = undefined;
+    const socket = sessionEvents(this.session, this.machineId);
+    this.socket = socket;
+    socket.onopen = () => {
+      this.reconnectDelay = 500;
+      if (this.hasOpened) {
+        this.flushEventBuffer();
+        this.onReconnect?.();
+      }
+      this.hasOpened = true;
+      this.isReconnecting = false;
+    };
+    socket.onmessage = (message) => void this.handleMessage(message.data);
+    socket.onerror = () => {
+      if (!this.shouldReconnect) return;
+      this.isReconnecting = true;
+    };
+    socket.onclose = () => {
+      if (!this.shouldReconnect) return;
+      this.isReconnecting = true;
+      this.scheduleWebSocketReconnect();
+    };
+  }
+
+  private scheduleWebSocketReconnect(): void {
+    window.clearTimeout(this.reconnectTimer);
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, 5_000);
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = undefined;
+      this.openWebSocketFallback();
+    }, delay);
   }
 
   private flushEventBuffer(): void {
@@ -128,9 +173,10 @@ export class SessionSocket {
 
 export class RealtimeSocket {
   private source: EventSource | undefined;
+  private socket: WebSocket | undefined;
   private onEvent: ((event: RealtimeEvent) => void) | undefined;
   private onOpen: (() => void) | undefined;
-  private reconnectTimer?: number;
+  private reconnectTimer: number | undefined;
   private reconnectDelay = 500;
   private shouldReconnect = false;
   private hasOpened = false;
@@ -150,7 +196,9 @@ export class RealtimeSocket {
     this.shouldReconnect = false;
     window.clearTimeout(this.reconnectTimer);
     closeEventSourceQuietly(this.source);
+    closeWebSocketQuietly(this.socket);
     this.source = undefined;
+    this.socket = undefined;
     this.onEvent = undefined;
     this.onOpen = undefined;
     this.hasOpened = false;
@@ -172,13 +220,49 @@ export class RealtimeSocket {
     };
     source.onmessage = (message) => void this.handleMessage(message.data);
     source.onerror = () => {
-      // Native EventSource keeps retrying.
+      if (!this.shouldReconnect) return;
+      if (!this.hasOpened) this.openWebSocketFallback();
+      // Once opened, native EventSource keeps retrying.
     };
+  }
+
+  private openWebSocketFallback(): void {
+    if (!this.shouldReconnect) return;
+    closeEventSourceQuietly(this.source);
+    closeWebSocketQuietly(this.socket);
+    this.source = undefined;
+    const socket = realtimeEvents(this.machineId);
+    this.socket = socket;
+    socket.onopen = () => {
+      this.reconnectDelay = 500;
+      this.hasOpened = true;
+      this.onOpen?.();
+    };
+    socket.onmessage = (message) => void this.handleMessage(message.data);
+    socket.onerror = () => {
+      // The close event schedules reconnects when the fallback transport is used.
+    };
+    socket.onclose = () => {
+      if (!this.shouldReconnect) return;
+      this.scheduleWebSocketReconnect();
+    };
+  }
+
+  private scheduleWebSocketReconnect(): void {
+    window.clearTimeout(this.reconnectTimer);
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, 5_000);
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = undefined;
+      this.openWebSocketFallback();
+    }, delay);
   }
 
   private async handleMessage(data: MessageEvent["data"]): Promise<void> {
     const event = await parseSocketEvent(data);
-    if (isRealtimeEvent(event)) this.onEvent?.(event);
+    for (const realtimeEvent of realtimeEventsFromSocketEvent(event)) {
+      this.onEvent?.(realtimeEvent);
+    }
   }
 }
 
@@ -195,6 +279,11 @@ function isGlobalSessionEvent(event: unknown): event is GlobalSessionEvent {
 function isRealtimeEvent(event: unknown): event is RealtimeEvent {
   const type = eventType(event);
   return isGlobalSessionEvent(event) || type === "terminal.created" || type === "terminal.exited" || type === "terminal.closed" || type === "workspace.activity";
+}
+
+function realtimeEventsFromSocketEvent(event: unknown): RealtimeEvent[] {
+  if (isBatchEvent(event)) return event.events.filter(isRealtimeEvent);
+  return isRealtimeEvent(event) ? [event] : [];
 }
 
 function eventType(event: unknown): string {
@@ -228,4 +317,13 @@ function closeEventSourceQuietly(source: EventSource | undefined): void {
   source.onmessage = null;
   source.onerror = null;
   source.close();
+}
+
+function closeWebSocketQuietly(socket: WebSocket | undefined): void {
+  if (socket === undefined) return;
+  socket.onopen = null;
+  socket.onmessage = null;
+  socket.onerror = null;
+  socket.onclose = null;
+  socket.close();
 }

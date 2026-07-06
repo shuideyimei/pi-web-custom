@@ -1,4 +1,4 @@
-import type { DeleteWorkspaceFileResponse, FileSuggestion, MoveWorkspaceFileOptions, PiPackageScope, PiWebConfigValues, PromptAttachment, RunTerminalCommandInput, SessionRef, TerminalCommandRun, TerminalCommandRunFilter, WriteWorkspaceFileOptions } from "../../../shared/apiTypes";
+import type { DeleteWorkspaceFileResponse, FileSuggestion, MoveWorkspaceFileOptions, PiModelsConfigValues, PiPackageScope, PiWebConfigValues, PromptAttachment, RunTerminalCommandInput, SessionRef, TerminalCommandRun, TerminalCommandRunFilter, WriteWorkspaceFileOptions } from "../../../shared/apiTypes";
 import { request } from "./http";
 import {
   arrayOf,
@@ -29,6 +29,7 @@ import {
   parseOAuthFlowState,
   parsePiPackageInstallResponse,
   parsePiPackagesResponse,
+  parsePiModelsConfigResponse,
   parsePiWebConfigResponse,
   parsePiWebPluginsResponse,
   parsePiWebRuntimeResponse,
@@ -105,6 +106,12 @@ export const machinesApi = {
 export const configApi = {
   config: () => request("/api/config", parsePiWebConfigResponse),
   saveConfig: (config: PiWebConfigValues) => request("/api/config", parsePiWebConfigResponse, { method: "PUT", body: JSON.stringify({ config }) }),
+};
+
+export const modelsConfigApi = {
+  config: () => request("/api/models-config", parsePiModelsConfigResponse),
+  saveConfig: (config: PiModelsConfigValues) => request("/api/models-config", parsePiModelsConfigResponse, { method: "PUT", body: JSON.stringify({ config }) }),
+  saveRaw: (raw: string) => request("/api/models-config", parsePiModelsConfigResponse, { method: "PUT", body: JSON.stringify({ raw }) }),
 };
 
 export const pluginsApi = {

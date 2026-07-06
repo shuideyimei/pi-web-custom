@@ -597,6 +597,81 @@ describe("PiSessionService", () => {
     await service.dispose();
   });
 
+  it("publishes a generated fallback session name when the model is not ready", async () => {
+    const fake = fakeRuntime("prompt-session");
+    const hub = new CapturingSessionEventHub();
+    const service = new PiSessionService(hub, {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("prompt-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await service.prompt(sessionRef("prompt-session"), "Build the thing");
+
+    expect(fake.session.sessionName).toBe("Build the thing");
+    expect(hub.sessionEvents).toContainEqual({ sessionId: "prompt-session", event: { type: "session.name", sessionId: "prompt-session", name: "Build the thing" } });
+    expect(hub.globalEvents).toContainEqual({ type: "session.name", sessionId: "prompt-session", name: "Build the thing" });
+    await service.dispose();
+  });
+
+  it("generates a session name when new sessions already contain non-user bootstrap messages", async () => {
+    const fake = fakeRuntime("bootstrap-session", {
+      messages: [{ role: "system", content: "bootstrap" }],
+      sessionManager: fakeSessionManager("/workspace", {
+        getBranch: () => [{ type: "branch_summary", summary: "bootstrap" }],
+      }),
+    });
+    const hub = new CapturingSessionEventHub();
+    const service = new PiSessionService(hub, {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("bootstrap-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await service.prompt(sessionRef("bootstrap-session"), "你好");
+
+    expect(fake.session.sessionName).toBe("你好");
+    expect(hub.globalEvents).toContainEqual({ type: "session.name", sessionId: "bootstrap-session", name: "你好" });
+    await service.dispose();
+  });
+
+  it("does not regenerate a session name after a user message already exists", async () => {
+    const fake = fakeRuntime("existing-user-session", {
+      sessionManager: fakeSessionManager("/workspace", {
+        getBranch: () => [{ type: "message", message: { role: "user", content: "Previous request" } }],
+      }),
+    });
+    const hub = new CapturingSessionEventHub();
+    const service = new PiSessionService(hub, {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("existing-user-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await service.prompt(sessionRef("existing-user-session"), "Second request");
+
+    expect(fake.session.sessionName).toBeUndefined();
+    expect(hub.globalEvents).not.toContainEqual({ type: "session.name", sessionId: "existing-user-session", name: "Second request" });
+    await service.dispose();
+  });
+
+  it("bridges runtime session info changes to session name events", async () => {
+    const fake = fakeRuntime("named-session");
+    const hub = new CapturingSessionEventHub();
+    const service = new PiSessionService(hub, {
+      createAgentRuntime: runtimeCreator(fake.runtime),
+      sessionManager: sessionGateway([sessionRecord("named-session")]),
+      heartbeatIntervalMs: 60_000,
+    });
+
+    await service.start("/workspace");
+    fake.emit({ type: "session_info_changed", name: "Generated Title" });
+
+    expect(hub.sessionEvents).toContainEqual({ sessionId: "named-session", event: { type: "session.name", sessionId: "named-session", name: "Generated Title" } });
+    expect(hub.globalEvents).toContainEqual({ type: "session.name", sessionId: "named-session", name: "Generated Title" });
+    await service.dispose();
+  });
+
   it("lists runtime commands from extensions, prompts, and skills", async () => {
     const fake = fakeRuntime("commands-session", {
       extensionRunner: { getRegisteredCommands: () => [{ invocationName: "btw", description: "Break the work down" }] },

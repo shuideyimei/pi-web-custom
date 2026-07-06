@@ -19,6 +19,7 @@ import { registerGitRoutes } from "./gitRoutes.js";
 import { registerTerminalProxyRoutes } from "./terminalProxyRoutes.js";
 import { registerWorkspaceDeletionRoutes } from "./workspaces/workspaceDeletionRoutes.js";
 import { createFilePiWebConfigService, registerConfigRoutes, type PiWebConfigService } from "./configRoutes.js";
+import { createFilePiModelsConfigService, registerModelsConfigRoutes, type PiModelsConfigService } from "./modelsConfigRoutes.js";
 import { PiPackageService } from "./piPackageService.js";
 import { PiWebPluginService } from "./piWebPluginService.js";
 import { createPiWebStatusCache } from "./piWebStatusCache.js";
@@ -37,6 +38,7 @@ export interface AppDependencies {
   piWebPlugins?: Pick<PiWebPluginService, "manifest" | "plugins" | "readAsset">;
   piPackages?: Pick<PiPackageService, "packages" | "install">;
   config?: PiWebConfigService;
+  modelsConfig?: PiModelsConfigService;
   clientDist?: string | false;
   logger?: FastifyServerOptions["logger"];
   /** Maximum accepted HTTP request body size in bytes. */
@@ -141,6 +143,7 @@ export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInsta
   const piWebPlugins = deps.piWebPlugins ?? new PiWebPluginService();
   const piPackages = deps.piPackages ?? new PiPackageService();
   const configService = deps.config ?? createFilePiWebConfigService();
+  const modelsConfigService = deps.modelsConfig ?? createFilePiModelsConfigService();
   const sessionDaemon = deps.sessionDaemon ?? new SessionDaemonClient();
   const piWebStatusCache = createPiWebStatusCache(() => getPiWebStatus(sessionDaemon), {
     onError: (error) => { app.log.warn({ err: error }, "failed to refresh PI WEB status cache"); },
@@ -181,6 +184,7 @@ export async function buildApp(deps: AppDependencies = {}): Promise<FastifyInsta
     }
   });
   registerConfigRoutes(app, configService);
+  registerModelsConfigRoutes(app, modelsConfigService);
 
   registerMachineRoutes(app, machines);
   registerMachinePluginProxyRoutes(app, machines);

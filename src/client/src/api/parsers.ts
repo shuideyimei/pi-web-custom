@@ -1,4 +1,4 @@
-import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, DailyTokenUsage, DeleteWorkspaceFileResponse, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitActionResponse, GitCommitResponse, GitDiffResponse, GitFileState, GitLogEntry, GitLogResponse, GitRemoteActionResponse, GitStatusFile, GitStatusResponse, Machine, MachineHealth, MachineKind, MachineRuntime, MachineStatus, MessagePage, ModelSelectionResponse, MoveWorkspaceFileResponse, OAuthFlowState, PiPackageInfo, PiPackageInstallResponse, PiPackagesResponse, PiPackageScope, PiWebCapability, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebPluginConfigMap, PiWebPluginInfo, PiWebPluginsResponse, PiWebPluginScope, PiWebReleaseStatus, PiWebRuntimeComponent, PiWebRuntimeResponse, PiWebServiceComponent, PiWebShortcutConfig, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SavedPromptAttachment, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevelsResponse, TokenUsageSummary, TokenUsageSummaryResponse, WriteWorkspaceFileResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
+import type { ArchiveSessionsResponse, AuthProviderOption, AuthProviderStatus, AuthProvidersResponse, AuthStatusSource, AuthType, CommandOption, CommandResult, DailyTokenUsage, DeleteWorkspaceFileResponse, FileContentResponse, FileSuggestion, FileTreeEntry, FileTreeResponse, GitActionResponse, GitCommitResponse, GitDiffResponse, GitFileState, GitLogEntry, GitLogResponse, GitRemoteActionResponse, GitStatusFile, GitStatusResponse, Machine, MachineHealth, MachineKind, MachineRuntime, MachineStatus, MessagePage, ModelSelectionResponse, MoveWorkspaceFileResponse, OAuthFlowState, PiModelProviderConfig, PiPackageInfo, PiPackageInstallResponse, PiPackagesResponse, PiPackageScope, PiModelsConfigResponse, PiModelsConfigValues, PiWebCapability, PiWebComponentStatus, PiWebConfigEnvOverrides, PiWebConfigResponse, PiWebConfigValues, PiWebInstallationInfo, PiWebPluginConfigMap, PiWebPluginInfo, PiWebPluginsResponse, PiWebPluginScope, PiWebReleaseStatus, PiWebRuntimeComponent, PiWebRuntimeResponse, PiWebServiceComponent, PiWebShortcutConfig, PiWebStatusMessage, PiWebStatusResponse, PiWebStatusSeverity, Project, QueuedSessionMessage, SavedPromptAttachment, SessionInfo, SessionModel, SessionStatus, SlashCommand, TerminalCommandRun, TerminalCommandRunStatus, TerminalInfo, ThinkingLevelsResponse, TokenUsageSummary, TokenUsageSummaryResponse, WriteWorkspaceFileResponse, Workspace, WorkspaceActivity, WorkspaceActivityResponse } from "../../../shared/apiTypes";
 import { isPiWebCapability } from "../../../shared/capabilities";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -222,6 +222,39 @@ function optionalModel(value: unknown): Pick<SessionStatus, "model"> | object {
 export function parseModelSelectionResponse(value: unknown): ModelSelectionResponse {
   const record = requireRecord(value);
   return { models: arrayOf(parseSessionModel)(record["models"]) };
+}
+
+export function parsePiModelsConfigResponse(value: unknown): PiModelsConfigResponse {
+  const record = requireRecord(value);
+  return {
+    path: requireString(record, "path"),
+    exists: requireBoolean(record, "exists"),
+    config: parsePiModelsConfigValues(record["config"]),
+    raw: requireString(record, "raw"),
+    ...optionalField("error", optionalString(record, "error")),
+  };
+}
+
+function parsePiModelsConfigValues(value: unknown): PiModelsConfigValues {
+  const record = requireRecord(value);
+  const providers = record["providers"];
+  if (!isRecord(providers) || Array.isArray(providers)) throw new Error("Invalid models config providers field");
+  const config: PiModelsConfigValues = { providers: {} };
+  for (const [key, item] of Object.entries(record)) {
+    if (key !== "providers") config[key] = item;
+  }
+  for (const [providerId, provider] of Object.entries(providers)) {
+    config.providers[providerId] = parsePiModelProviderConfig(provider);
+  }
+  return config;
+}
+
+function parsePiModelProviderConfig(value: unknown): PiModelProviderConfig {
+  const record = requireRecord(value);
+  if (Array.isArray(value)) throw new Error("Invalid models config provider field");
+  const provider: PiModelProviderConfig = {};
+  for (const [key, item] of Object.entries(record)) provider[key] = item;
+  return provider;
 }
 
 function parseThinkingLevel(value: unknown): string {

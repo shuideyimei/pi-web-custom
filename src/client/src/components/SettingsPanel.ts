@@ -7,6 +7,7 @@ import "./settings/SettingsGeneralPanel";
 import "./settings/SettingsSessiondPanel";
 import "./settings/SettingsMarketplacePanel";
 import "./settings/SettingsPluginsPanel";
+import "./settings/SettingsProvidersPanel";
 import "./settings/SettingsShortcutsPanel";
 
 type SettingsPresentation = "panel" | "dialog";
@@ -135,14 +136,7 @@ export class SettingsPanel extends LitElement {
       case "plugins":
         return this.renderPluginsPanel();
       case "providers":
-        return this.renderActionSection({
-          title: "Providers",
-          body: "Configure or remove stored provider authentication without sending a slash command to the active session.",
-          actions: [
-            { label: "Configure authentication", primary: true, run: this.onConfigureAuth },
-            { label: "Remove authentication", run: this.onLogoutAuth },
-          ],
-        });
+        return this.renderProvidersPanel();
       case "usage":
         return this.renderActionSection({
           title: "Usage",
@@ -210,6 +204,15 @@ export class SettingsPanel extends LitElement {
         .onReload=${() => this.loadPackages()}
         .onInstallPackage=${(source: string, scope: PiPackageScope) => this.installPackage(source, scope)}
       ></settings-marketplace-panel>
+    `;
+  }
+
+  private renderProvidersPanel(): TemplateResult {
+    return html`
+      <settings-providers-panel
+        .onConfigureAuth=${this.onConfigureAuth}
+        .onLogoutAuth=${this.onLogoutAuth}
+      ></settings-providers-panel>
     `;
   }
 

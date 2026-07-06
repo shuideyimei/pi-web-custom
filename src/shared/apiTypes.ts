@@ -131,6 +131,75 @@ export interface PiWebConfigResponse {
   envOverrides: PiWebConfigEnvOverrides;
 }
 
+export type PiModelApi = "openai-completions" | "openai-responses" | "anthropic-messages" | "google-generative-ai" | (string & {});
+export type PiModelInputType = "text" | "image";
+export type PiModelThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type PiModelThinkingLevelMap = Partial<Record<PiModelThinkingLevel, string | null>>;
+export type PiModelHeaders = Record<string, string>;
+export type PiModelCompatConfig = Record<string, unknown>;
+
+export interface PiModelCostConfig {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+}
+
+export interface PiModelConfig {
+  id: string;
+  name?: string;
+  api?: PiModelApi;
+  baseUrl?: string;
+  reasoning?: boolean;
+  thinkingLevelMap?: PiModelThinkingLevelMap;
+  input?: PiModelInputType[];
+  contextWindow?: number;
+  maxTokens?: number;
+  cost?: Required<PiModelCostConfig>;
+  headers?: PiModelHeaders;
+  compat?: PiModelCompatConfig;
+  [key: string]: unknown;
+}
+
+export interface PiModelOverrideConfig {
+  name?: string;
+  reasoning?: boolean;
+  thinkingLevelMap?: PiModelThinkingLevelMap;
+  input?: PiModelInputType[];
+  contextWindow?: number;
+  maxTokens?: number;
+  cost?: PiModelCostConfig;
+  headers?: PiModelHeaders;
+  compat?: PiModelCompatConfig;
+  [key: string]: unknown;
+}
+
+export interface PiModelProviderConfig {
+  name?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  api?: PiModelApi;
+  headers?: PiModelHeaders;
+  compat?: PiModelCompatConfig;
+  authHeader?: boolean;
+  models?: PiModelConfig[];
+  modelOverrides?: Record<string, PiModelOverrideConfig>;
+  [key: string]: unknown;
+}
+
+export interface PiModelsConfigValues {
+  providers: Record<string, PiModelProviderConfig>;
+  [key: string]: unknown;
+}
+
+export interface PiModelsConfigResponse {
+  path: string;
+  exists: boolean;
+  config: PiModelsConfigValues;
+  raw: string;
+  error?: string;
+}
+
 export interface Project {
   id: string;
   name: string;

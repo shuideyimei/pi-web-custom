@@ -1381,9 +1381,10 @@ export class PiSessionService {
       }
     }
     active.unsubscribe = session.subscribe((event) => {
-      this.events.publish(session.sessionId, toClientEvent(event));
-      this.publishActivityForEvent(session, event);
       const eventType = getString(event, "type");
+      if (eventType === "session_info_changed") this.publishSessionName(session, getString(event, "name"));
+      else this.events.publish(session.sessionId, toClientEvent(event));
+      this.publishActivityForEvent(session, event);
       if (eventType === "compaction_end") this.scheduleCompactionQueueDrain(session.sessionId, 0, { willRetry: getBoolean(event, "willRetry") === true });
       if (eventType === "agent_start" || eventType === "agent_end") this.scheduleCompactionQueueDrain(session.sessionId);
       this.publishStatus(session);
@@ -1510,21 +1511,25 @@ export class PiSessionService {
   }
 
   private maybeGenerateSessionName(session: PiAgentSession, firstMessage: string): void {
-    if (session.sessionName !== undefined || session.messages.length !== 0 || session.isStreaming || session.isCompacting) return;
+    if (session.sessionName !== undefined || hasUserMessage(session) || session.isStreaming || session.isCompacting) return;
+    const fallbackName = fallbackSessionName(firstMessage);
     const model = session.model;
-    if (model === undefined) return;
+    if (model === undefined) {
+      this.applyGeneratedSessionName(session, fallbackName);
+      return;
+    }
 
     void generateShortSessionName(this.modelRegistry, model, firstMessage).then((name) => {
-      this.applyGeneratedSessionName(session, name ?? fallbackSessionName(firstMessage));
+      this.applyGeneratedSessionName(session, name ?? fallbackName);
     }).catch(() => {
-      this.applyGeneratedSessionName(session, fallbackSessionName(firstMessage));
+      this.applyGeneratedSessionName(session, fallbackName);
     });
   }
 
   private applyGeneratedSessionName(session: PiAgentSession, name: string | undefined): void {
     if (name === undefined || session.sessionName !== undefined) return;
     session.setSessionName(name);
-    this.publishSessionName(session);
+    this.publishSessionName(session, name);
   }
 
   applyAuthChange(change: AuthChange = {}): void {
@@ -1564,10 +1569,11 @@ export class PiSessionService {
     }
   }
 
-  private publishSessionName(session: PiAgentSession): void {
-    const event = session.sessionName === undefined
+  private publishSessionName(session: PiAgentSession, explicitName?: string): void {
+    const name = explicitName ?? session.sessionName;
+    const event = name === undefined
       ? { type: "session.name", sessionId: session.sessionId } as const
-      : { type: "session.name", sessionId: session.sessionId, name: session.sessionName } as const;
+      : { type: "session.name", sessionId: session.sessionId, name } as const;
     this.events.publish(session.sessionId, event);
     this.events.publishGlobal(event);
   }
@@ -2245,6 +2251,10 @@ function forkOptionsFromExtension(options: object | undefined): { position?: "be
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function hasUserMessage(session: PiAgentSession): boolean {
+  return historyMessages(session).some((message) => isRecord(message) && message["role"] === "user");
 }
 
 function historyMessages(session: PiAgentSession): unknown[] {
