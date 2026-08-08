@@ -2065,7 +2065,7 @@ export class PiWebApp extends LitElement {
         ${state.machineDialogOpen ? html`<machine-dialog .error=${state.error} .onSubmit=${(input: MachineDialogSubmit) => this.submitMachineDialog(input)} .onCancel=${() => { this.setState({ machineDialogOpen: false }); }}></machine-dialog>` : null}
         ${state.themeDialog !== undefined ? html`<command-picker title=${state.themeDialog.title} .options=${state.themeDialog.options} .selectedValue=${state.themeDialog.selectedValue} .onPick=${(value: string) => { this.pickTheme(value); }} .onCancel=${() => { this.setState({ themeDialog: undefined }); }}></command-picker>` : null}
         ${this.settingsSection !== undefined ? html`<settings-dialog .section=${this.settingsSection} .actions=${this.getDefaultActions()} .projectCwd=${selectedMachineId(this.state) === "local" ? this.state.selectedWorkspace?.path : undefined} .onNavigate=${(section: SettingsSection) => { this.navigateSettings(section); }} .onClose=${() => { this.closeSettings(); }} .onConfigSaved=${(config: PiWebConfigValues) => { this.applyClientConfig(config); }} .onOpenThemePicker=${() => { this.closeSettings(); this.openThemeDialog(); }} .onConfigureAuth=${() => { this.closeSettings(); void this.auth.openLogin(); }} .onLogoutAuth=${() => { this.closeSettings(); void this.auth.openLogout(); }} .onOpenUsageDashboard=${() => { this.closeSettings(); this.selectMainView("home"); }}></settings-dialog>` : null}
-        <toast-container .toasts=${state.toasts}></toast-container>
+        <toast-container .toasts=${state.toasts} .onDismiss=${(id: string) => { this.sessions.dismissToast(id); }}></toast-container>
       </div>
     `;
   }

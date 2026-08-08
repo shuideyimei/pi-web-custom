@@ -292,7 +292,7 @@ function nextStepsFromState(status: SessionStatus | undefined): SessionWorkSumma
   const queued = status?.queuedMessages.length ?? 0;
   if (queued > 0) steps.push({ label: `${String(queued)} queued message${queued === 1 ? "" : "s"}`, detail: "Will run after current activity", status: "pending" });
   if (status?.isCompacting === true) steps.push({ label: "History compaction running", status: "running" });
-  if (status?.isStreaming === true) steps.push({ label: "Assistant response in progress", status: "running" });
+  if (status?.isStreaming === true) steps.push({ label: "Planning next step", status: "running" });
   if (status?.isBashRunning === true) steps.push({ label: "Command still running", status: "running" });
   return steps;
 }

@@ -113,6 +113,24 @@ describe("buildSessionWorkSummary", () => {
       source: "session",
     }));
   });
+
+  it("labels streaming assistant work as planning next step", () => {
+    const summary = buildSessionWorkSummary({
+      messages: [],
+      status: {
+        sessionId: "s1",
+        isStreaming: true,
+        isCompacting: false,
+        isBashRunning: false,
+        pendingMessageCount: 0,
+        queuedMessages: [],
+        tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        cost: 0,
+      },
+    });
+
+    expect(summary.nextSteps).toEqual([{ label: "Planning next step", status: "running" }]);
+  });
 });
 
 function line(role: ChatLine["role"], parts: ChatLine["parts"]): ChatLine {

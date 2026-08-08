@@ -195,10 +195,12 @@ export const workspacePanelStyles = css`
   .opened-tool .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .add-tool { flex: 0 0 auto; width: 36px; height: 36px; justify-content: center; padding: 0; border-radius: 13px; background: color-mix(in srgb, var(--pi-surface) 88%, transparent); }
   .add-tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .tool-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: min(300px, calc(100vw - 32px)); display: grid; gap: 2px; border: 1px solid var(--pi-elevated-border); border-radius: 18px; background: color-mix(in srgb, var(--pi-elevated-bg) 94%, transparent); box-shadow: 0 18px 50px var(--pi-shadow); padding: 8px; }
-  .tool-menu button { width: 100%; min-height: 38px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 9px; align-items: center; border-color: transparent; background: transparent; border-radius: 12px; text-align: left; }
-  .tool-menu button:hover, .tool-menu button:focus-visible, .tool-menu button.selected { background: color-mix(in srgb, var(--pi-text) 10%, transparent); }
-  .tool-shortcut { color: var(--pi-muted); font-size: 12px; justify-self: end; }
+  .tool-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; box-sizing: border-box; width: min(220px, calc(100vw - 32px)); display: grid; gap: 3px; border: 1px solid var(--pi-elevated-border); border-radius: 14px; background: var(--pi-elevated-bg); box-shadow: 0 14px 36px var(--pi-shadow); padding: 6px; }
+  .tool-menu button { width: 100%; min-height: 34px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 0; background: transparent; border-radius: 9px; color: var(--pi-text); padding: 7px 8px; text-align: left; font: inherit; font-size: 13px; line-height: 1.2; }
+  .tool-menu button:hover, .tool-menu button:focus-visible { background: var(--pi-surface-hover); }
+  .tool-menu button.selected { background: var(--pi-selection-bg); color: var(--pi-text-bright); }
+  .tool-menu .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-shortcut { color: var(--pi-muted); font-size: 11px; line-height: 1; justify-self: end; }
   .tab-icon { flex: 0 0 auto; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
   .tab-custom-icon { flex: 0 0 auto; width: 14px; height: 14px; display: inline-grid; place-items: center; color: currentColor; pointer-events: none; }
   .tab-custom-icon svg { width: 14px; height: 14px; pointer-events: none; }

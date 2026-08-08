@@ -15,6 +15,7 @@ import { selectedMachineId, type GetState, type SetState, type UpdateUrl } from 
 
 const MESSAGE_PAGE_SIZE = 100;
 const STOP_ACTIVE_WORK_ABORT_TIMEOUT_MS = 2500;
+const SUBAGENT_COMPANION_SUGGESTIONS_CUSTOM_TYPE = "subagent_companion_suggestions";
 
 export interface SessionEventSocket {
   connect(session: SessionRef, onEvent: (event: SessionUiEvent) => void, onReconnect?: () => void, machineId?: string): void;
@@ -36,6 +37,7 @@ export class SessionController {
   private catchupStreamSessionId: string | undefined;
   private pendingTranscriptEvents: SessionUiEvent[] = [];
   private pendingTranscriptFrame: number | undefined;
+  private readonly dismissedToastIds = new Set<string>();
 
   constructor(
     private readonly getState: GetState,
@@ -131,6 +133,7 @@ export class SessionController {
       if (session.archived === true) {
         const page = await this.api.messages(session, { limit: MESSAGE_PAGE_SIZE }, selectedMachineId(this.getState()));
         if (seq !== this.selectionSeq || this.getState().selectedSession?.id !== session.id) return;
+        this.syncCompanionSuggestionToastFromHistory(page.messages);
         const history = this.transcripts.mergeHistory(transcriptKey, page);
         this.setState({ ...history, isLoadingEarlierMessages: false, isReceivingPartialStream: false, status: undefined, activity: undefined });
         if (options?.updateUrl !== false) this.updateUrl();
@@ -145,6 +148,7 @@ export class SessionController {
       );
       const [page, status] = await Promise.all([this.api.messages(session, { limit: MESSAGE_PAGE_SIZE }, selectedMachineId(this.getState())), this.api.status(session, selectedMachineId(this.getState()))]);
       if (seq !== this.selectionSeq || this.getState().selectedSession?.id !== session.id) return;
+      this.syncCompanionSuggestionToastFromHistory(page.messages);
       const history = this.transcripts.mergeHistory(transcriptKey, page);
       this.setState({ ...history, isLoadingEarlierMessages: false, ...this.setStreamCatchup(status.isStreaming ? session.id : undefined), status, activity: this.getState().sessionActivities[session.id], availableThinkingLevels: [] });
       this.applyStatus(status);
@@ -170,6 +174,7 @@ export class SessionController {
     try {
       const page = await this.api.messages(session, { before: state.messagePageStart, limit: MESSAGE_PAGE_SIZE }, selectedMachineId(this.getState()));
       if (this.getState().selectedSession?.id !== session.id) return;
+      this.syncCompanionSuggestionToastFromHistory(page.messages);
       const history = this.transcripts.mergeHistory(this.sessionCacheKey(session.id), page);
       this.setState(history);
     } catch (error) {
@@ -580,6 +585,7 @@ export class SessionController {
       this.flushPendingTranscriptEvents();
       const [page, status] = await Promise.all([this.api.messages(session, { limit: MESSAGE_PAGE_SIZE }, selectedMachineId(this.getState())), this.api.status(session, selectedMachineId(this.getState()))]);
       if (this.getState().selectedSession?.id !== sessionId) return;
+      this.syncCompanionSuggestionToastFromHistory(page.messages);
       const history = this.transcripts.mergeHistory(this.sessionCacheKey(sessionId), page);
       this.setState({
         ...history,
@@ -723,6 +729,10 @@ export class SessionController {
       if (event.type === "command.output") {
         this.addToast(event.message, event.level);
       }
+      const companionSuggestion = companionSuggestionToastMessage(event);
+      if (companionSuggestion !== undefined) {
+        this.addToast(companionSuggestion, "info", { id: SUBAGENT_COMPANION_SUGGESTIONS_CUSTOM_TYPE, persistent: true });
+      }
     } else if (event.type === "status.update") {
       this.applyStatus(event.status);
     } else if (event.type === "activity.update") {
@@ -788,15 +798,28 @@ export class SessionController {
       if (session?.id !== sessionId) return;
       const page = await this.api.messages(session, { limit: MESSAGE_PAGE_SIZE }, selectedMachineId(this.getState()));
       if (this.getState().selectedSession?.id !== sessionId) return;
+      this.syncCompanionSuggestionToastFromHistory(page.messages);
       this.setState(this.transcripts.mergeHistory(this.sessionCacheKey(sessionId), page));
     } catch (error) {
       if (this.getState().selectedSession?.id === sessionId) this.setState({ error: String(error) });
     }
   }
 
-  private addToast(message: string, level: "info" | "success" | "error" = "info"): void {
-    const toast = { id: `toast-${String(Date.now())}-${String(Math.random())}`, message, level, timestamp: Date.now() };
-    this.setState({ toasts: [...this.getState().toasts, toast] });
+  dismissToast(id: string): void {
+    this.dismissedToastIds.add(id);
+    this.setState({ toasts: this.getState().toasts.filter((toast) => toast.id !== id) });
+  }
+
+  private syncCompanionSuggestionToastFromHistory(messages: readonly unknown[]): void {
+    const message = companionSuggestionToastMessageFromHistory(messages);
+    if (message !== undefined) this.addToast(message, "info", { id: SUBAGENT_COMPANION_SUGGESTIONS_CUSTOM_TYPE, persistent: true });
+  }
+
+  private addToast(message: string, level: "info" | "success" | "error" = "info", options: { id?: string; persistent?: boolean } = {}): void {
+    const toast = { id: options.id ?? `toast-${String(Date.now())}-${String(Math.random())}`, message, level, timestamp: Date.now(), ...(options.persistent === true ? { persistent: true } : {}) };
+    if (this.dismissedToastIds.has(toast.id)) return;
+    this.setState({ toasts: [...this.getState().toasts.filter((candidate) => candidate.id !== toast.id), toast] });
+    if (toast.persistent === true) return;
     // Auto-remove toast after 5 seconds
     setTimeout(() => {
       this.setState({ toasts: this.getState().toasts.filter((t) => t.id !== toast.id) });
@@ -876,6 +899,36 @@ function sessionMessageCountPatch(state: AppState, sessionId: string, messageCou
 
 function isHighFrequencyTranscriptEvent(event: SessionUiEvent): boolean {
   return event.type === "assistant.delta" || event.type === "assistant.thinking.delta" || event.type === "shell.chunk";
+}
+
+function companionSuggestionToastMessage(event: SessionUiEvent): string | undefined {
+  if (event.type !== "message.end" && event.type !== "message.append") return undefined;
+  return companionSuggestionMessageText(event.message);
+}
+
+function companionSuggestionToastMessageFromHistory(messages: readonly unknown[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const text = companionSuggestionMessageText(messages[index]);
+    if (text !== undefined) return text;
+  }
+  return undefined;
+}
+
+function companionSuggestionMessageText(message: unknown): string | undefined {
+  if (getString(message, "role") !== "custom") return undefined;
+  if (getString(message, "customType") !== SUBAGENT_COMPANION_SUGGESTIONS_CUSTOM_TYPE) return undefined;
+  const content = getString(message, "content")?.trim();
+  return content !== undefined && content !== "" ? content : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getString(value: unknown, key: string): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const property = value[key];
+  return typeof property === "string" ? property : undefined;
 }
 
 function isSessionNotFoundError(error: unknown): boolean {

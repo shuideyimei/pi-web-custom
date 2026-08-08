@@ -17,7 +17,7 @@ export class ThinkingNode extends LitElement {
     return html`
       <div class=${this.streaming ? "thinking-node streaming" : "thinking-node"}>
         <div class="thinking-header">
-          <span class=${this.streaming ? "thinking-label shimmer-text" : "thinking-label"}>Thinking</span>
+          <span class=${this.streaming ? "thinking-label shimmer-text" : "thinking-label"}>Planning next step</span>
         </div>
       </div>
     `;

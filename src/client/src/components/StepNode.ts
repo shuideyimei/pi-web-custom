@@ -11,7 +11,7 @@ import "./ToolCallNode";
  * Also handles tool-only groups (no thinking) from the adapter.
  *
  * Collapsed (default):
- *   ● Thinking… ▸              (while thinking, text shimmer)
+ *   ● Planning next step… ▸    (while thinking / waiting, text shimmer)
  *   ● Working… ▸               (while tools running, text shimmer)
  *   ● Read 3 files · Ran 2 ▸    (after tools complete, compact summary)
  *
@@ -20,7 +20,7 @@ import "./ToolCallNode";
  *
  * Thinking content is never shown (Codex design: thinking is private).
  */
-const THINKING_LABEL = "Thinking";
+const PLANNING_LABEL = "Planning next step";
 
 @customElement("step-node")
 export class StepNode extends LitElement {
@@ -56,10 +56,10 @@ export class StepNode extends LitElement {
 
     // Determine active label. While waiting for the next assistant text, keep the
     // activity row visible but don't switch to the completed summary yet.
-    const activeTool = currentRunningTool(step) ?? latestTool(step);
+    const activeTool = currentRunningTool(step);
     const label = activeTool !== undefined
       ? runningToolLabel(activeTool)
-      : THINKING_LABEL;
+      : PLANNING_LABEL;
 
     return html`
       <div class="step${effectiveOpen ? " expanded" : ""}${shouldShimmer ? " animating" : ""}${step.tools.length === 0 ? " empty" : ""}">
@@ -199,10 +199,6 @@ function currentRunningTool(step: StepData): ToolAggregation | undefined {
     if (status === "running" || status === "pending") return agg;
   }
   return undefined;
-}
-
-function latestTool(step: StepData): ToolAggregation | undefined {
-  return step.tools.at(-1);
 }
 
 function runningToolLabel(agg: ToolAggregation): string {

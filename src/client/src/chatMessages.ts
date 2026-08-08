@@ -1,6 +1,8 @@
 import { summarizeSubagentArgs } from "../../shared/subagentDisplay";
 import type { ChatLine, ChatPart, ToolExecutionPart, ToolPreview } from "./components/shared";
 
+const SUBAGENT_COMPANION_SUGGESTIONS_CUSTOM_TYPE = "subagent_companion_suggestions";
+
 export function normalizeMessages(messages: unknown[]): ChatLine[] {
   return removeStaleModelResponseFailures(coalesceToolExecutions(messages.flatMap(normalizeMessage)).filter((message) => message.parts.length > 0));
 }
@@ -44,6 +46,7 @@ export function appendThinking(messages: ChatLine[], text: string): ChatLine[] {
 
 export function normalizeMessage(message: unknown): ChatLine[] {
   if (isChatLine(message)) return [message];
+  if (getString(message, "role") === "custom" && getString(message, "customType") === SUBAGENT_COMPANION_SUGGESTIONS_CUSTOM_TYPE) return [];
   if (getString(message, "role") === "bashExecution") return [withMessageMeta(normalizeBashExecution(message), message)];
   const role = normalizeRole(getString(message, "role"));
   const parts = normalizeContent(getProperty(message, "content"), message);

@@ -777,7 +777,82 @@ export class ChatView extends LitElement {
   }
 
   private renderActivityDock() {
-    return null;
+    if (!this.shouldShowActivityDock()) return null;
+    const state = this.activityState();
+    // Match Cursor: empty waits use the same shimmer row as thinking, not a separate pill.
+    if (state === "compacting" || state === "bash") {
+      return html`
+        <div class="activity-dock active" aria-live="polite">
+          <span class="dot"></span>
+          <span class="activity-text">${this.activityText(state)}</span>
+        </div>
+      `;
+    }
+    return html`
+      <timeline-node-wrapper class="tl-node-instance" .status=${"running"} .isLive=${true}>
+        <thinking-node .streaming=${true}></thinking-node>
+      </timeline-node-wrapper>
+    `;
+  }
+
+  private shouldShowActivityDock(): boolean {
+    if (!this.isSessionLive()) return false;
+    return !this.hasVisibleLiveTimelineActivity();
+  }
+
+  private hasVisibleLiveTimelineActivity(): boolean {
+    const nodes = this.computedTimelineNodes();
+    const streamingKey = this.streamingNodeKey(nodes);
+    let afterUser = 0;
+    for (let index = nodes.length - 1; index >= 0; index--) {
+      if (nodes[index]?.type === "user") {
+        afterUser = index + 1;
+        break;
+      }
+    }
+    for (let index = afterUser; index < nodes.length; index++) {
+      const node = nodes[index];
+      if (node === undefined) continue;
+      const isStreamingNode = node.key === streamingKey;
+      if (node.type === "thinking" || node.type === "bash" || node.type === "tool") return true;
+      if (node.type === "step" && this.isActiveLiveStep(node, isStreamingNode)) return true;
+      // In-progress assistant text fills the wait. After message_end (activity idle),
+      // keep showing Planning next step even though prior text remains on screen.
+      if (
+        node.type === "assistant"
+        && isStreamingNode
+        && this.activity?.phase !== "idle"
+        && this.activity?.phase !== "error"
+        && node.parts.some((part) => part.type === "text" && part.text.trim() !== "")
+      ) return true;
+    }
+    return false;
+  }
+
+  private isActiveLiveStep(node: TimelineNode, isStreamingNode: boolean): boolean {
+    if (!this.shouldRenderTimelineNode(node, isStreamingNode)) return false;
+    const step = node.step;
+    if (step === undefined) return false;
+    const isRunning = step.tools.some((agg) => this.stepToolStatus(agg) === "running" || this.stepToolStatus(agg) === "pending");
+    if (isRunning) return true;
+    const hasThinking = step.thinking !== undefined;
+    const isCompleteNoTools = step.tools.length === 0 && hasThinking;
+    if (isCompleteNoTools && isStreamingNode) return true;
+    // Tools finished but assistant text has not arrived yet — StepNode shows planning.
+    if (step.tools.length > 0 && !this.stepHasFollowingAssistantText(node)) return true;
+    return false;
+  }
+
+  private stepHasFollowingAssistantText(stepNode: TimelineNode): boolean {
+    const nodes = this.computedTimelineNodes();
+    const index = nodes.findIndex((node) => node.key === stepNode.key);
+    if (index < 0) return false;
+    for (let nextIndex = index + 1; nextIndex < nodes.length; nextIndex++) {
+      const next = nodes[nextIndex];
+      if (next?.type === "assistant" && next.parts.some((part) => part.type === "text" && part.text !== "")) return true;
+      if (next?.type === "user") return false;
+    }
+    return false;
   }
 
   private renderQueuedMessages() {
@@ -823,7 +898,7 @@ export class ChatView extends LitElement {
   }
 
   private readonly activityPhrases: Record<string, string[]> = {
-    running: ["Thinking…", "Analyzing request…", "Inspecting project…", "Reasoning…", "Planning…"],
+    running: ["Planning next step…", "Analyzing request…", "Inspecting project…", "Reasoning…"],
     bash: ["Running command…", "Executing…", "Waiting for output…"],
     compacting: ["Compacting history…", "Summarizing…", "Organizing context…"],
     queued: ["Queued…", "Waiting…", "Pending…"],
